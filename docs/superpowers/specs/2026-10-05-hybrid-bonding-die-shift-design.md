@@ -37,7 +37,9 @@ wafer-scale models, HPC execution.
 ```
 PIMM_hybrid_bonding/
   hbsim/
-    params.py          # parameter schema (name, unit, range, scale, default); validation
+    materials.py       # fixed constants, unit conversion, bond-layer mixing, analytic baseline
+    params.py          # parameter schema (name, unit, range, scale, default); validation; study loading
+    sampling.py        # Sobol / LHS / one-at-a-time samplers
     geometry.py        # Gmsh: parametric 3D die + bond layers + wafer patch, extruded hex mesh, tagged
     physics.py         # DOLFINx transient thermal + quasi-static thermo-elastic solves
     postprocess.py     # pad-grid overlay extraction; translation/rotation/magnification fit
@@ -58,7 +60,6 @@ PIMM_hybrid_bonding/
     surrogate/         # model.pt, scalers.json, metrics.json, train.log
     figures/
   tests/
-  docker/Dockerfile    # FROM pinned dolfinx image; adds missing Python deps only
   legacy/epoxy_squeeze_flow/   # current 01/02/03 epoxy scripts, reference only
   requirements.txt     # host venv, pinned versions
 ```
@@ -74,7 +75,9 @@ study YAML ──sampler──▶ parameter sets ──runner (N Docker workers)
 ### 2.3 Boundaries
 
 - Only `geometry.py`, `physics.py`, `postprocess.py`, `run_one.py` run inside Docker.
-  `params.py` is shared and must import nothing beyond the standard library, numpy, and PyYAML.
+  `params.py`, `materials.py`, `postprocess.py` are shared and import only the standard library
+  and numpy (the base image has no PyYAML; `params.load_study` imports it lazily, host only).
+  Container-side code reads JSON only.
 - `run_one.py` interface: `python -m hbsim.run_one <run_dir>`; reads `<run_dir>/params.json`,
   writes `metrics.json`, `overlay.npz`, `run.log`. Exit code 0 = success.
 - `run_id` = first 12 hex chars of SHA-256 of the canonical (sorted-key) JSON of the full
@@ -109,8 +112,9 @@ each point bonds, after the bonder's alignment removes rigid translation/rotatio
   Die and wafer share the conformal interface plane (needed for the thermal solve).
   Through-thickness layers: ≥ 4 in die, ≥ 4 in wafer, 1 per bond layer. In-plane density set
   by a `mesh_n` parameter (elements along die edge), chosen by the convergence study.
-- Physical tags: volumes {die, die_bond, wafer_bond, wafer}; facets {die_top, interface,
-  wafer_bottom, wafer_sides}.
+- Physical tags: volumes {1 = die body (bond layer + Si), 2 = wafer body}. Material regions
+  (bond layer vs Si) are assigned as DG0 fields by z-coordinate (|z| < t_bond is bond layer), and
+  boundary facets are located geometrically — this works unchanged on the die/wafer submeshes.
 
 ### 3.3 Step 1 — transient thermal
 
@@ -132,17 +136,28 @@ solution transferred from the parent mesh at each time step.
 Linear isotropic elasticity with eigenstrain `ε* = α·(T − T_ref)·I + ε_bow`, `T_ref = 20 °C`.
 
 - Die bow: through-thickness eigenstrain gradient `ε_bow = −κ·(z − z_mid)·(e_x⊗e_x + e_y⊗e_y)`
-  in the die, which gives a free die curvature κ. `κ = 8·h / L_die²` from the bow height `h`
-  (positive h = center higher than edges, i.e. die convex toward the wafer).
-- Die BCs: `die_top` `u_z = 0` (bond head holds die flat); in-plane rigid motion removed by
-  pinning the die-top center point in x, y and one point on the x-axis in y.
-- Bond force: uniform pressure `F / L_die²` on `die_top` (enters via the Poisson effect).
+  over the whole die body (bond layer + Si), `z_mid` = mid-height of the die body. This field is
+  compatible, so a free die is stress-free with curvature κ. `κ = 8·h / L_die²` from the bow
+  height `h`; positive h = die bottom convex (center protrudes toward the wafer), which stretches
+  the die interface by `κ·(t_die + t_bond)/2`.
+- Die BCs: the die is otherwise free. Its 6 rigid modes are removed by point pins on the
+  interface plane: (0,0,0) in x, y, z; (L/2,0,0) in y, z; (0,L/2,0) in z. Pinning on the interface
+  (not the top) keeps rigid tilt out of the interface in-plane displacement.
+- Bond-head compliance: normal spring on `die_top`, traction `−k_head·u_z` (Robin term in the
+  stiffness). `k_head → 0` is a free die (full bow strain); `k_head → ∞` is a rigid flat head
+  that flattens the bow (bow strain → 0). `k_head` is a swept input (§4.1). Prototype check
+  (`h = 5 µm`, `L = 10 mm`): `m_x` = 20.04, 6.90, 0.18 ppm for `k_head` = 0, 1, 10⁴ MPa/mm.
+- Bond force: equal and opposite uniform pressure `F / L_die²` on `die_top` (downward) and on the
+  die interface face (upward, the wafer reaction) — self-equilibrated; acts via the Poisson effect.
 - Wafer BCs: `wafer_bottom` `u_z = 0` and in-plane `u = α_chuck·(T_chuck − T_ref)·(x, y)` (moves
   with the chuck); `wafer_sides` in-plane `u = α_Si·(T_chuck − T_ref)·(x, y)` (continuity with
-  the full wafer beyond the patch).
+  the full wafer beyond the patch; side nodes on the bottom edge belong to the bottom BC).
+  The wafer also carries the downward pressure `F / L_die²` on its top face within the die
+  footprint.
 - Solver: stiffness matrices are time-independent → assemble and LU-factor (MUMPS) once per
-  body; per time step only the right-hand side is reassembled. P1 hex elements; P2 if the
-  convergence study requires it.
+  body; per time step only the right-hand side is reassembled. P2 (quadratic) hex elements: the
+  prototype showed P1 hexes lock in bending at these aspect ratios (bow error ~90%), while P2
+  matches the plate solution to 0.1%. Prototype cost: ~195k DOFs, 34–46 s per run.
 
 ### 3.5 Step 3 — bond wave and overlay
 
@@ -159,14 +174,21 @@ Linear isotropic elasticity with eigenstrain `ε* = α·(T − T_ref)·I + ε_bo
 
 ### 3.6 Verification targets
 
-- Uniform thermal mismatch: `v_wave → ∞` (lock at t = 0, so die and wafer stay at their
-  initial uniform temperatures), `bow_h = 0`, `F_bond = 0`, bond layers set to Si properties
+Verification runs call `physics.simulate(p, lock="t0")`, which locks every pad at contact
+(t = 0, both bodies at their uniform initial temperatures) — the `v_wave → ∞` limit — and may use
+values outside the sweep ranges (e.g. `F_bond = 0`, `phi_cu = 0`).
+
+- Uniform thermal mismatch: lock at t = 0, `bow_h = 0`, `F_bond = 0`, bond layers set to Si properties
   (`E_d = 130 GPa`, `alpha_d = 2.6 ppm/K`, `phi_cu = 0`), `alpha_chuck = 2.6 ppm/K`. Then each
   body expands uniformly and the corner overlay magnitude equals
   `α_Si·(T_head − T_chuck)·(L_die/2)·√2`. Tolerance 1%.
-- Bow only (isothermal at `T_ref`): interface in-plane strain equals `κ·t_die/2`. Tolerance 1%.
+- Bow only (isothermal at `T_ref`, `k_head = 0`, `F_bond = 0`): fitted magnification equals
+  `κ·(t_die + t_bond)/2`. Tolerance 1%.
+- Rigid head (`k_head = 10⁴ MPa/mm`), bow only: `|m_x|` < 2% of the free-die value.
 - Zero load (all temperatures `T_ref`, `h = 0`, `F = 0`) → overlay = 0 to machine precision.
 - Mirror symmetry: `x0 → −x0` flips the sign of `t_x` and leaves `m_x` unchanged.
+- Prototype results (2026-10-05): uniform case 3×10⁻⁹ relative error; bow case 0.1%; zero load
+  1.5×10⁻¹⁷ mm.
 
 ## 4. Parameters, Outputs, Sampling
 
@@ -187,6 +209,7 @@ Linear isotropic elasticity with eigenstrain `ε* = α·(T − T_ref)·I + ε_bo
 | Materials | `alpha_chuck` | ppm/K | 0.5–5 | linear |
 | Mechanical | `bow_h` | µm | −5 to +5 | linear |
 | Mechanical | `F_bond` | N | 1–50 | linear |
+| Mechanical | `k_head` | MPa/mm | 10⁻³–10⁴ | log |
 | Mechanical | `x0`, `y0` | fraction of `L_die` | 0–0.3 | linear |
 
 Fixed: Si isotropic `E = 130 GPa`, `ν = 0.28`, `α = 2.6 ppm/K`; `T_ref = 20 °C`; numerical
@@ -238,8 +261,9 @@ defaults.
 For each output `y`: `ŷ = y_analytic(p) + NN(p)`.
 
 - `y_analytic`: closed-form baseline from §3.6. Magnification
-  `m_a = α_Si·(T_head − T_ref) − α_chuck·(T_chuck − T_ref) + κ·t_die/2` (thin bond layers
-  neglected; wafer interface assumed to follow the chuck) gives `m_x = m_y = m_a` and
+  `m_a = α_Si·(T_head − T_ref) − α_chuck·(T_chuck − T_ref) + κ·(t_die + t_bond)/2` (thin bond
+  layers neglected; wafer interface assumed to follow the chuck; free-die bow, i.e. the
+  `k_head` reduction is left to the NN) gives `m_x = m_y = m_a` and
   `d_max = |m_a|·(L_die/2)·√2`. Baseline is zero for `t_x`, `t_y`, `theta`, `resid_3sigma`.
 - NN: MLP (PyTorch), 4 hidden layers × 128, SiLU, Adam, early stopping on a 10% validation
   split of `main_sweep`. Inputs scaled to [0, 1] (log-scale parameters log-transformed first);
@@ -253,8 +277,15 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
 
 ### 5.2 Sensitivity and figures
 
-- Sobol first-order and total indices per output (SALib Saltelli sampling, N = 2¹⁴ on the
-  surrogate), 95% bootstrap confidence intervals.
+- Sobol first-order `S_i`, total `S_Ti`, and second-order `S_ij` indices per output (SALib
+  Saltelli sampling with second order, N = 2¹⁴ → N·(2D+2) ≈ 557k surrogate evaluations),
+  95% bootstrap confidence intervals.
+- Interaction ranking: report `S_Ti − S_i` (each input's share of variance through interactions)
+  and the largest `S_ij` pairs. Hypotheses to test, not assume: bow × k_head, ΔT × v_wave,
+  bow × v_wave. Prototype hint: bond-wave asymmetry effects are small (x0 = 0.2 gave
+  t_x ≈ 0.007 nm) because thermal diffusion through the die (~ms) is much faster than the wave
+  (~0.1 s), so v_wave interactions may turn out weak — report whichever the data show.
+- Figures: stacked bar of `S_i` and `S_Ti − S_i` per input; `S_ij` heatmap per output.
 - Process-window contour maps of `d_max` over chosen parameter pairs (default
   `ΔT = T_head − T_chuck` vs `bow_h`), with a configurable spec line (default 100 nm).
 - Line-study figures: FEM points with surrogate prediction band overlaid.
@@ -273,9 +304,12 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
 ## 7. Testing
 
 - `tests/test_verification.py` (Docker): §3.6 analytic and symmetry checks.
-- `tests/test_convergence.py` (Docker, slow, marked): refine `mesh_n` and `n_t` until the key
-  outputs change < 2%, including a `t_bond = 0.05 µm` case; writes a table used in the paper's
-  appendix.
+- `tests/test_convergence.py` (Docker, slow, marked): refine `mesh_n`, `nz_die`, `nz_wafer`,
+  and `n_t` until the key outputs change < 2%, at the default case and the thin-layer extreme
+  (`t_bond = 0.05 µm`, `t_die = 30 µm`, `L_die = 20 mm`, aspect ratio ~10⁴); writes
+  `results/convergence.csv` for the paper's appendix. It also compares the thin-layer case with
+  the bond layer replaced by Si properties: the difference bounds the layer's own effect and
+  confirms the thin elements do not corrupt the solution.
 - `tests/test_postprocess.py` (host): fit recovers synthetic translation, rotation,
   magnification exactly.
 - `tests/test_params.py` (host): range/scale mapping round-trips; samplers reproducible by seed;
@@ -285,8 +319,9 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
 
 ## 8. Environment and Reproducibility
 
-- FEM image pinned by digest in each study YAML; `docker/Dockerfile` builds a local
-  `hbsim-fem` image only if the base image lacks required Python packages (e.g. PyYAML).
+- FEM image pinned by digest in each study YAML
+  (`dolfinx/dolfinx@sha256:2ae4bfbc0d9077268880faf04c72750528bee986c94ab223a2c159969bd56fa8`).
+  No custom image: container-side code needs only numpy, gmsh, DOLFINx (all in the base image).
 - Host `.venv`: gmsh, pyvista, numpy, pandas, pyarrow, scipy, scikit-learn, SALib, torch,
   matplotlib, pytest; versions pinned in `requirements.txt`.
 - Git repository initialized; `results/`, `.venv/`, meshes, and field outputs are git-ignored.
@@ -294,10 +329,13 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
 
 ## 9. Risks
 
-- 50 nm bond layers under ~0.25 mm in-plane elements create extreme aspect ratios. Mitigation:
-  convergence test includes the thinnest case; if needed, raise `mesh_n` or enforce a minimum
-  in-plane element count.
+- 50 nm bond layers under ~0.5 mm in-plane elements create extreme aspect ratios (~10⁴).
+  P2 hexes handled the extreme case in the prototype (46 s, no solver failure). Mitigation if the
+  convergence test fails: raise `mesh_n`; last resort, model each bond layer as a membrane
+  (surface) layer on its own body. A spring (Robin) interface between die and wafer is not used:
+  before bonding the bodies are not connected, and a spring cannot represent the layer's own
+  thermal expansion.
 - Run time may exceed 60 s at the converged mesh. Mitigation: pilot study measures it; reduce
   `main_sweep` to 1,024 runs or coarsen the wafer patch if needed.
-- PyTorch wheel availability for Python 3.14 on macOS arm64: check at setup; fall back to a
-  Python 3.12 or 3.13 venv for host analysis if unavailable.
+- PyTorch on Python 3.14 / macOS arm64: verified available (torch 2.14.1, 2026-10-05).
+  Fall back to a 3.12/3.13 venv only if a later dependency lacks 3.14 wheels.
