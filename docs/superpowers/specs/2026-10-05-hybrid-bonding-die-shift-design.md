@@ -17,7 +17,8 @@ Method ("PIMM" = FEM + neural-network surrogate):
 Success criteria:
 
 - FEM model passes analytic verification (≤1% error) and mesh convergence (≤2% change).
-- Main sweep (2,048 runs) completes overnight on one Mac with 4 parallel workers.
+- Main sweep (2,048 runs) completes overnight on one Mac (pilot: 39 s median per run; parallel
+  runs limited by Docker memory, see §9).
 - Surrogate achieves holdout R² ≥ 0.95 on the primary outputs (magnification, max misalignment).
 - Every paper figure is reproducible from a study YAML + git commit + pinned Docker image.
 
@@ -140,9 +141,11 @@ Linear isotropic elasticity with eigenstrain `ε* = α·(T − T_ref)·I + ε_bo
   compatible, so a free die is stress-free with curvature κ. `κ = 8·h / L_die²` from the bow
   height `h`; positive h = die bottom convex (center protrudes toward the wafer), which stretches
   the die interface by `κ·(t_die + t_bond)/2`.
-- Die BCs: the die is otherwise free. Its 6 rigid modes are removed by point pins on the
-  interface plane: (0,0,0) in x, y, z; (L/2,0,0) in y, z; (0,L/2,0) in z. Pinning on the interface
-  (not the top) keeps rigid tilt out of the interface in-plane displacement.
+- Die BCs: the die is otherwise free. In-plane rigid modes are removed by statically determinate
+  point pins on the interface plane: (0,0,0) in x, y; (L/2,0,0) in y. With `k_head > 0` the head
+  spring removes the out-of-plane modes; only for `k_head = 0` (verification) are `u_z` pins added
+  at (0,0,0), (L/2,0,0), (0,L/2,0). Adding `u_z` pins together with the spring over-constrains the
+  die (prototype: spurious 0.2 nm translation for a centered wave).
 - Bond-head compliance: normal spring on `die_top`, traction `−k_head·u_z` (Robin term in the
   stiffness). `k_head → 0` is a free die (full bow strain); `k_head → ∞` is a rigid flat head
   that flattens the bow (bow strain → 0). `k_head` is a swept input (§4.1). Prototype check
@@ -286,8 +289,9 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
   t_x ≈ 0.007 nm) because thermal diffusion through the die (~ms) is much faster than the wave
   (~0.1 s), so v_wave interactions may turn out weak — report whichever the data show.
 - Figures: stacked bar of `S_i` and `S_Ti − S_i` per input; `S_ij` heatmap per output.
-- Process-window contour maps of `d_max` over chosen parameter pairs (default
-  `ΔT = T_head − T_chuck` vs `bow_h`), with a configurable spec line (default 100 nm).
+- Process-window contour maps of `d_max` over chosen parameter pairs — default pairs
+  (`T_head`, `bow_h`) with `T_chuck` at its default (so `T_head` sets ΔT), and (`bow_h`, `k_head`) —
+  with a configurable spec line (default 100 nm).
 - Line-study figures: FEM points with surrogate prediction band overlaid.
 
 ## 6. Error Handling
@@ -295,8 +299,9 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
 - Each run is a separate `docker run` with a timeout (default 600 s).
 - Failures (non-zero exit, exception, timeout, non-converged solve, non-finite outputs) produce
   `metrics.json` with `status: failed` and the error message; the sweep continues.
-- Pre-solve validation: values inside declared ranges; geometric sanity (`t_die > 10·t_bond`,
-  `|bow_h| < L_die/100`).
+- Pre-solve validation: every parameter present, finite, and inside its declared range; numerics
+  are positive integers (`mesh_n` even). Geometric sanity is guaranteed by the ranges
+  (`t_die ≥ 30·t_bond`, `|bow_h| ≤ L_die/400`), so no cross-parameter checks are needed.
 - `cli.py run` skips runs with an existing `status: ok`; `--retry-failed` reruns failed ones.
 - `dataset.parquet` is always rebuilt from `runs/`; per-run files are the source of truth.
 - Surrogate training excludes failed runs and logs how many were excluded.
@@ -310,6 +315,10 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
   `results/convergence.csv` for the paper's appendix. It also compares the thin-layer case with
   the bond layer replaced by Si properties: the difference bounds the layer's own effect and
   confirms the thin elements do not corrupt the solution.
+  Result (2026-10-06): passed; every default level within 0.2% of the finest for `m_x` and
+  `d_max` in both cases (default `d_max` 307.59 nm at `mesh_n` 20 vs 307.79 nm at 28; thin layer
+  692.76 vs 692.35 nm); no `NUMERICS` changes. Bond layer replaced by Si changes `d_max` by 0.26%
+  (default) and 0.23% (thin layer), so bond-layer inputs are expected to rank near zero.
 - `tests/test_postprocess.py` (host): fit recovers synthetic translation, rotation,
   magnification exactly.
 - `tests/test_params.py` (host): range/scale mapping round-trips; samplers reproducible by seed;
@@ -337,5 +346,10 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
   thermal expansion.
 - Run time may exceed 60 s at the converged mesh. Mitigation: pilot study measures it; reduce
   `main_sweep` to 1,024 runs or coarsen the wafer patch if needed.
+- Memory: one run at default numerics peaks at 3.5 GB (measured); the Docker Desktop VM here
+  has 8.3 GB, so 4 parallel runs were killed (exit 137) in the first pilot. Studies declare
+  `mem_per_run_gb` (default 3.6) and the runner caps parallel runs to 95% of Docker's memory:
+  2 workers at 8 GB, ~11 h for `main_sweep`. Raising Docker's limit to 16 GB, or `mesh_n` 12
+  (1.8 GB, 21 s per run, also within 0.2%), restores 4 workers.
 - PyTorch on Python 3.14 / macOS arm64: verified available (torch 2.14.1, 2026-10-05).
   Fall back to a 3.12/3.13 venv only if a later dependency lacks 3.14 wheels.
