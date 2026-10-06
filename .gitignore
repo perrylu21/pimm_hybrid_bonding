@@ -7,3 +7,6 @@ results/
 *.xdmf
 *.h5
 .DS_Store
+.pytest_cache/
+*.npz
+.superpowers/
