@@ -1,0 +1,12 @@
+# Fast training set: 512 Sobol runs on the coarser mesh (mesh_n 12: within 0.2% of the finest
+# mesh in tests/test_convergence.py, 1.8 GB and ~21 s per run). To extend, raise n to 1024:
+# the first 512 runs are reused.
+name: main_sweep_fast
+sampler: {type: sobol, n: 512, seed: 42}
+workers: 4
+threads_per_worker: 2
+mem_per_run_gb: 2.4
+timeout_s: 600
+image: dolfinx/dolfinx@sha256:2ae4bfbc0d9077268880faf04c72750528bee986c94ab223a2c159969bd56fa8
+numerics: {mesh_n: 12}
+params: {}

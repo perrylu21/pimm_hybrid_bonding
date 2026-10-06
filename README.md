@@ -28,7 +28,7 @@ Design spec: `docs/superpowers/specs/2026-10-05-hybrid-bonding-die-shift-design.
 | `hbsim/sensitivity.py` | Sobol indices with SALib |
 | `hbsim/figures.py` | Paper figures (PDF) |
 | `cli.py` | Command-line entry point |
-| `studies/*.yaml` | Study definitions |
+| `studies/*.yaml` | Study definitions (`*_fast.yaml`: quick 512-run route) |
 | `results/<study>/` | Run folders, `dataset.parquet`, `manifest.json`, surrogate, figures (not in git) |
 | `legacy/epoxy_squeeze_flow/` | Earlier epoxy squeeze-flow scripts, kept for reference |
 
@@ -51,7 +51,119 @@ Design spec: `docs/superpowers/specs/2026-10-05-hybrid-bonding-die-shift-design.
    uv pip install --python .venv/bin/python -r requirements.txt
    ```
 
-## Workflow
+## Quick route: 512-run study (recommended first)
+
+512 training runs on the coarser mesh (`mesh_n` 12, within 0.2% of the finest mesh) instead of
+2,048 on the default mesh. Total time is about 1.5–2 h instead of about 14 h. If the surrogate is
+accurate enough (step 5), use these results; otherwise extend the sweep (step 6).
+
+Run every command from the project folder:
+
+```bash
+cd /Users/perrylu21/project/claude_code/PIMM_hybrid_bonding
+```
+
+**Step 1. Start Docker Desktop** and check it responds:
+
+```bash
+open -a Docker
+docker info --format 'Docker memory: {{.MemTotal}} bytes'
+```
+
+**Step 2. (Optional, ~4 min) Run the tests:**
+
+```bash
+.venv/bin/python -m pytest
+docker run --rm -v "$PWD":/work -w /work dolfinx/dolfinx:stable python3 -m pytest -p no:cacheprovider
+```
+
+Both should end with `passed` and no `failed`.
+
+**Step 3. Training set: 512 runs (~1–1.5 h).**
+
+```bash
+.venv/bin/python cli.py run studies/main_sweep_fast.yaml
+```
+
+Progress prints one line per run (`[main_sweep_fast] 37/512 <run_id> ok`). With 8 GB of Docker
+memory it runs 3 in parallel. You can stop with Ctrl-C and rerun the same command later: finished
+runs are kept. When it ends, check that nothing failed:
+
+```bash
+.venv/bin/python cli.py collect results/main_sweep_fast
+```
+
+Expected: `ok    512`. If some show `failed`, read `results/main_sweep_fast/runs/<run_id>/run.log`,
+then rerun them with `.venv/bin/python cli.py run studies/main_sweep_fast.yaml --retry-failed`.
+
+**Step 4. Test set: 128 runs (~15–20 min).** These are never used for training; they measure how
+accurate the surrogate is.
+
+```bash
+.venv/bin/python cli.py run studies/holdout_fast.yaml
+.venv/bin/python cli.py collect results/holdout_fast
+```
+
+Expected: `ok    128`.
+
+**Step 5. Train the surrogate (a few minutes).**
+
+```bash
+.venv/bin/python cli.py train --train results/main_sweep_fast --test results/holdout_fast --gp --learning-curve
+```
+
+It prints the holdout accuracy of each output, for example `m_x  R2=0.9950  RMSE=2.1`. Then look
+at the learning curve (holdout error at 128, 256 and 512 training runs):
+
+```bash
+.venv/bin/python -c "
+import pandas as pd
+c = pd.read_csv('results/main_sweep_fast/surrogate/learning_curve.csv')
+print(c[c.output.isin(['m_x', 'd_max'])].pivot(index='n_train', columns='output', values='rmse').round(3))"
+```
+
+The surrogate is good enough when both hold:
+
+- `R2` ≥ 0.95 for `m_x` and `d_max`.
+- RMSE at 512 is less than 10% lower than at 256 (the curve has flattened, so more runs would not
+  help much).
+
+The Gaussian-process comparison scores are in `results/main_sweep_fast/surrogate/metrics.json`
+under `"gp"`.
+
+**Step 6. Only if step 5 fails: extend to 1,024 runs (~1–1.5 h more).** In
+`studies/main_sweep_fast.yaml`, change `n: 512` to `n: 1024`, then rerun steps 3 and 5. The first
+512 runs are reused, so only the new 512 execute.
+
+**Step 7. Sensitivity analysis (~1 min).**
+
+```bash
+.venv/bin/python cli.py sensitivity --surrogate results/main_sweep_fast/surrogate
+```
+
+It prints the five most influential parameters for `m_x` and `d_max` (`S1` = effect alone, `ST` =
+total effect, `interaction` = `ST − S1`). The full tables are written to
+`results/main_sweep_fast/surrogate/sobol_first_total.csv` and `sobol_second_order.csv`.
+
+**Step 8. Figures.**
+
+```bash
+.venv/bin/python cli.py figures --surrogate results/main_sweep_fast/surrogate --test results/holdout_fast
+```
+
+PDFs are written to `results/main_sweep_fast/figures/`: parity plots, Sobol bars, pairwise
+interaction heatmaps, learning curve, and two process-window maps.
+
+**Step 9. (Optional, ~30 min) FEM trend checks.** One-at-a-time FEM sweeps of five parameters,
+drawn against the surrogate's prediction:
+
+```bash
+for f in studies/lines_*.yaml; do .venv/bin/python cli.py run "$f"; done
+.venv/bin/python cli.py figures --surrogate results/main_sweep_fast/surrogate --test results/holdout_fast \
+    --lines results/lines_*
+```
+
+## Full workflow (2,048 runs)
 
 Run everything from the project folder.
 
