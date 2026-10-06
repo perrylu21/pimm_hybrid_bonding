@@ -1,0 +1,8 @@
+# Surrogate training set (spec 4.3). Sobol prefixes of size 2^k stay balanced for the learning curve.
+name: main_sweep
+sampler: {type: sobol, n: 2048, seed: 42}
+workers: 4
+threads_per_worker: 2
+timeout_s: 600
+image: dolfinx/dolfinx@sha256:2ae4bfbc0d9077268880faf04c72750528bee986c94ab223a2c159969bd56fa8
+params: {}

@@ -1,0 +1,8 @@
+# End-to-end check and timing estimate before the main sweep.
+name: pilot
+sampler: {type: sobol, n: 64, seed: 11}
+workers: 4
+threads_per_worker: 2
+timeout_s: 600
+image: dolfinx/dolfinx@sha256:2ae4bfbc0d9077268880faf04c72750528bee986c94ab223a2c159969bd56fa8
+params: {}   # every parameter swept over its schema range (see hbsim/params.py)

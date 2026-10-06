@@ -1,0 +1,8 @@
+# Independent surrogate test set: different sampler and seed, never used for training.
+name: holdout
+sampler: {type: lhs, n: 256, seed: 7}
+workers: 4
+threads_per_worker: 2
+timeout_s: 600
+image: dolfinx/dolfinx@sha256:2ae4bfbc0d9077268880faf04c72750528bee986c94ab223a2c159969bd56fa8
+params: {}
