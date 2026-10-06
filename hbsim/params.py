@@ -108,6 +108,7 @@ class Study:
     workers: int = 4
     timeout_s: int = 600
     threads_per_worker: int = 2
+    mem_per_run_gb: float = 3.6  # peak memory of one run (3.5 GB measured at default numerics)
     image: str = "dolfinx/dolfinx:stable"
     specs: dict = field(default_factory=dict)     # swept name -> ParamSpec (range may be narrowed)
     pinned: dict = field(default_factory=dict)    # name -> fixed value
@@ -142,6 +143,7 @@ def study_from_dict(d):
         workers=int(d.get("workers", 4)),
         timeout_s=int(d.get("timeout_s", 600)),
         threads_per_worker=int(d.get("threads_per_worker", 2)),
+        mem_per_run_gb=float(d.get("mem_per_run_gb", 3.6)),
         image=d.get("image", "dolfinx/dolfinx:stable"),
         specs=specs,
         pinned=pinned,

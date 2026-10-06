@@ -38,6 +38,27 @@ def check_docker(image):
         raise RuntimeError(f"Docker image {image} not found: run `docker pull {image}`")
 
 
+def docker_memory_bytes():
+    """Memory available to Docker containers (the Docker Desktop VM on macOS), or None."""
+    try:
+        out = subprocess.run(["docker", "info", "--format", "{{.MemTotal}}"], capture_output=True,
+                             text=True, timeout=30)
+        return int(out.stdout.strip())
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        return None
+
+
+def effective_workers(study, mem_bytes):
+    """Parallel runs that fit in Docker's memory (95% of it), at least 1, at most study.workers.
+
+    Running more than fit makes the kernel kill containers (exit code 137).
+    """
+    if not mem_bytes:
+        return study.workers
+    fit = int(0.95 * mem_bytes / (study.mem_per_run_gb * 1e9))
+    return max(1, min(study.workers, fit))
+
+
 def read_status(run_dir):
     """'ok' | 'failed' | None (not run or unreadable)."""
     f = Path(run_dir) / "metrics.json"
@@ -80,9 +101,16 @@ def run_study(study, results_root=None, retry_failed=False, executor=None, log=p
     study_dir = results_root / study.name
     runs_dir = study_dir / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
+    workers = study.workers
     if executor is None:
         check_docker(study.image)
         executor = docker_executor(study)
+        mem = docker_memory_bytes()
+        workers = effective_workers(study, mem)
+        if workers < study.workers:
+            log(f"[{study.name}] Docker has {mem / 1e9:.1f} GB; running {workers} workers instead of "
+                f"{study.workers} ({study.mem_per_run_gb} GB per run). Raise Docker Desktop's memory "
+                "limit (Settings > Resources) for more parallel runs.")
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     todo, run_ids = [], []
@@ -100,7 +128,7 @@ def run_study(study, results_root=None, retry_failed=False, executor=None, log=p
         todo.append(run_dir)
     # The current sample set defines the dataset; runs left over from an edited study are ignored.
     (study_dir / "run_ids.json").write_text(json.dumps(run_ids))
-    log(f"[{study.name}] {len(todo)} runs to execute ({study.workers} workers)")
+    log(f"[{study.name}] {len(todo)} runs to execute ({workers} workers)")
 
     def one(run_dir):
         (run_dir / "metrics.json").unlink(missing_ok=True)  # clear a previous failure on retry
@@ -116,7 +144,7 @@ def run_study(study, results_root=None, retry_failed=False, executor=None, log=p
         return run_dir, status
 
     done = 0
-    with ThreadPoolExecutor(max_workers=study.workers) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         for fut in as_completed([pool.submit(one, d) for d in todo]):
             run_dir, status = fut.result()
             done += 1

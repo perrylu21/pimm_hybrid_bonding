@@ -89,3 +89,20 @@ def test_docker_preflight_messages(monkeypatch, stderr, message):
                         lambda *a, **k: subprocess.CompletedProcess(a, 1, "", stderr))
     with pytest.raises(RuntimeError, match=message):
         runner.check_docker("img")
+
+
+@pytest.mark.parametrize("mem_gb, per_run, workers, expected", [
+    (8.3, 3.6, 4, 2),    # measured: Docker VM 8.3 GB, default mesh run peaks 3.5 GB
+    (16.0, 3.6, 4, 4),   # enough memory: keep the requested count
+    (2.0, 3.6, 4, 1),    # never below one worker
+])
+def test_workers_capped_by_docker_memory(mem_gb, per_run, workers, expected):
+    st = params.study_from_dict({"name": "t", "sampler": {"type": "lhs", "n": 1, "seed": 1},
+                                 "workers": workers, "mem_per_run_gb": per_run})
+    assert st.mem_per_run_gb == per_run
+    assert runner.effective_workers(st, mem_gb * 1e9) == expected
+
+
+def test_mem_per_run_defaults_to_measured_value():
+    st = params.study_from_dict({"name": "t", "sampler": {"type": "lhs", "n": 1, "seed": 1}})
+    assert st.mem_per_run_gb == 3.6
