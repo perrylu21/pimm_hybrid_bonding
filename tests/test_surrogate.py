@@ -83,3 +83,13 @@ def test_load_rejects_mismatched_schema(tmp_path):
     (tmp_path / "scalers.json").write_text(json.dumps(sc))
     with pytest.raises(ValueError, match="different parameter"):
         surrogate.Surrogate.load(tmp_path)
+
+
+def test_load_rejects_changed_input_range(tmp_path, monkeypatch):
+    from hbsim import params
+    m = surrogate.Surrogate.fit(_dataset(64, 1), n_models=1, max_epochs=5, patience=2, log=lambda s: None)
+    m.save(tmp_path)
+    widened = params.ParamSpec("bow_h", "um", -10.0, 10.0, 0.0)
+    monkeypatch.setitem(params.SWEPT, "bow_h", widened)
+    with pytest.raises(ValueError, match="bow_h"):
+        surrogate.Surrogate.load(tmp_path)

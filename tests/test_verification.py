@@ -53,3 +53,14 @@ def test_mirror_symmetry_of_wave_origin():
 def test_bad_lock_mode_rejected():
     with pytest.raises(ValueError, match="lock"):
         physics.simulate(params.defaults(), lock="later")
+
+
+def test_off_centre_wave_outputs_converge_in_time_steps():
+    """t_x must converge as time steps are added (review finding: on a uniform grid, pads near
+    the wave origin were blended across the fast thermal transient and t_x changed sign with n_t).
+    Coarse mesh keeps the test fast; convergence means a stable sign and shrinking changes."""
+    base = {**params.defaults(), "mesh_n": 8, "n_ring": 2, "nz_die": 2, "nz_wafer": 2,
+            "x0": 0.2, "n_pads": 11}
+    t20, t40, t80 = (_metrics({**base, "n_t": n}, "wave")[1]["t_x"] for n in (20, 40, 80))
+    assert np.sign(t20) == np.sign(t40) == np.sign(t80)
+    assert abs(t80 - t40) < abs(t40 - t20)

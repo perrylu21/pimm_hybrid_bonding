@@ -34,6 +34,11 @@ def baseline(df):
     return out
 
 
+def _input_specs():
+    """[name, low, high, scale] per input: the scaling encode() applies, saved with the model."""
+    return [[n, SWEPT[n].low, SWEPT[n].high, SWEPT[n].scale] for n in INPUTS]
+
+
 def ok_rows(df):
     """Successful runs only."""
     return df[df["status"] == "ok"].reset_index(drop=True)
@@ -121,8 +126,8 @@ class Surrogate:
         out_dir.mkdir(parents=True, exist_ok=True)
         torch.save([n.state_dict() for n in self.nets], out_dir / "model.pt")
         (out_dir / "scalers.json").write_text(json.dumps(
-            {"inputs": INPUTS, "outputs": OUTPUTS, "mean": self.mean.tolist(), "std": self.std.tolist()},
-            indent=2))
+            {"inputs": INPUTS, "input_specs": _input_specs(), "outputs": OUTPUTS,
+             "mean": self.mean.tolist(), "std": self.std.tolist()}, indent=2))
 
     @classmethod
     def load(cls, out_dir):
@@ -130,6 +135,10 @@ class Surrogate:
         sc = json.loads((out_dir / "scalers.json").read_text())
         if sc["inputs"] != INPUTS or sc["outputs"] != OUTPUTS:
             raise ValueError("saved surrogate was trained with a different parameter/output list")
+        changed = [a[0] for a, b in zip(sc.get("input_specs", []), _input_specs()) if a != b]
+        if "input_specs" not in sc or changed:
+            raise ValueError(f"saved surrogate was trained with different input ranges/scales "
+                             f"({', '.join(changed) or 'not recorded'}); retrain it")
         nets = []
         for state in torch.load(out_dir / "model.pt"):
             net = _mlp(len(INPUTS), len(OUTPUTS))

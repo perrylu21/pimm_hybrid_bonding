@@ -21,6 +21,7 @@ from hbsim.materials import SI, T_REF, bond_layer, curvature, to_model
 
 COMM = MPI.COMM_SELF  # each run is serial; parallelism comes from running many runs at once
 TOL = 1e-9
+T_FIRST = 1e-6  # s, first thermal step after contact (below the ~1e-5 s die diffusion time)
 NUMERIC_KEYS = ("mesh_n", "n_ring", "nz_die", "nz_wafer", "n_t", "margin_frac", "deg", "n_pads")
 
 
@@ -67,7 +68,7 @@ def solve_thermal(msh, m, times):
     bot = dmesh.locate_entities_boundary(msh, fdim, lambda x: np.isclose(x[2], lv["wafer_bottom"]))
     bcs = [fem.dirichletbc(PETSc.ScalarType(m["T_head"]), fem.locate_dofs_topological(V, fdim, top), V),
            fem.dirichletbc(PETSc.ScalarType(m["T_chuck"]), fem.locate_dofs_topological(V, fdim, bot), V)]
-    dt = times[1] - times[0]
+    dt = fem.Constant(msh, PETSc.ScalarType(times[1] - times[0]))
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
     a = fem.form(rc * u * v * ufl.dx + dt * k * ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx)
     L = fem.form(rc * T_n * v * ufl.dx)
@@ -76,7 +77,13 @@ def solve_thermal(msh, m, times):
     ksp = _lu_solver(A)
     T = fem.Function(V)
     history = [T_n.x.array.copy()]
-    for _ in times[1:]:
+    for t_prev, t_next in zip(times[:-1], times[1:]):
+        if not np.isclose(t_next - t_prev, float(dt.value)):  # graded grid: re-factor for new dt
+            dt.value = t_next - t_prev
+            A.zeroEntries()
+            fpetsc.assemble_matrix(A, a, bcs=bcs)
+            A.assemble()
+            ksp.setOperators(A)
         b = fpetsc.assemble_vector(L)
         fpetsc.apply_lifting(b, [a], [bcs])
         b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
@@ -272,7 +279,9 @@ def simulate(p, lock="wave"):
             origin = np.array([m["x0"], m["y0"]])
             corners = np.array([[sx * m["L"] / 2, sy * m["L"] / 2] for sx in (-1, 1) for sy in (-1, 1)])
             t_end = np.max(np.linalg.norm(corners - origin, axis=1)) / m["v_wave"]
-            times = np.linspace(0.0, t_end, int(num["n_t"]) + 1)
+            # Graded grid: the thermal transient after contact is ~1e-5-1e-2 s while the wave takes
+            # ~0.1 s, so steps start at T_FIRST and grow geometrically to t_end.
+            times = np.concatenate([[0.0], np.geomspace(min(T_FIRST, t_end / 10), t_end, int(num["n_t"]))])
             Vt, T_hist = solve_thermal(msh, m, times)
             T_par = fem.Function(Vt)
             diffs = [d0]
@@ -283,11 +292,8 @@ def simulate(p, lock="wave"):
                 diffs.append(die.eval_xy(pads) - waf.eval_xy(pads))
             diffs = np.array(diffs)  # (n_t+1, N, 2)
             t_lock = np.linalg.norm(pads - origin, axis=1) / m["v_wave"]
-            s = np.clip(t_lock / (times[1] - times[0]), 0, len(times) - 1)
-            k0 = np.minimum(np.floor(s).astype(int), len(times) - 2)
-            w = (s - k0)[:, None]
-            idx = np.arange(len(pads))
-            d_lock = (1 - w) * diffs[k0, idx] + w * diffs[k0 + 1, idx]
+            d_lock = np.array([[np.interp(t_lock[i], times, diffs[:, i, c]) for c in range(2)]
+                               for i in range(len(pads))])
             d = postprocess.remove_rigid(pads, d_lock, align)
         if not np.all(np.isfinite(d)):
             raise RuntimeError("non-finite overlay values")

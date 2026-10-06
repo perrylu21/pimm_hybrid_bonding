@@ -106,3 +106,71 @@ def test_workers_capped_by_docker_memory(mem_gb, per_run, workers, expected):
 def test_mem_per_run_defaults_to_measured_value():
     st = params.study_from_dict({"name": "t", "sampler": {"type": "lhs", "n": 1, "seed": 1}})
     assert st.mem_per_run_gb == 3.6
+
+
+def test_timeout_kills_the_container(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        if cmd[:2] == ["docker", "run"]:
+            raise subprocess.TimeoutExpired(cmd, 1)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    run_dir = runner.PROJECT_ROOT / "results" / "_t" / "runs" / "abc123"
+    with pytest.raises(subprocess.TimeoutExpired):
+        runner.docker_executor(_study())(run_dir)
+    name = calls[0][calls[0].index("--name") + 1]
+    assert name == "hbsim-t-abc123"
+    assert ["docker", "kill", name] in calls
+
+
+def test_interrupted_run_is_left_pending(tmp_path):
+    def interrupted(run_dir):
+        return subprocess.CompletedProcess([], 130, "", "KeyboardInterrupt")
+
+    df = runner.collect(runner.run_study(_study(n=2), tmp_path, executor=interrupted, log=lambda s: None))
+    assert set(df["status"]) == {"pending"}
+
+
+def test_ctrl_c_stops_the_sweep(tmp_path):
+    calls = []
+
+    def ctrl_c(run_dir):
+        calls.append(run_dir)
+        raise KeyboardInterrupt
+
+    st = params.study_from_dict({"name": "t", "sampler": {"type": "lhs", "n": 20, "seed": 3}, "workers": 1})
+    with pytest.raises(KeyboardInterrupt):
+        runner.run_study(st, tmp_path, executor=ctrl_c, log=lambda s: None)
+    assert len(calls) == 1
+    assert set(runner.collect(tmp_path / "t")["status"]) == {"pending"}
+
+
+def test_docker_failure_mid_sweep_aborts_without_recording(tmp_path):
+    calls = []
+
+    def docker_gone(run_dir):
+        calls.append(run_dir)
+        return subprocess.CompletedProcess([], 125, "", "Cannot connect to the Docker daemon")
+
+    st = params.study_from_dict({"name": "t", "sampler": {"type": "lhs", "n": 20, "seed": 3}, "workers": 1})
+    with pytest.raises(RuntimeError, match="Docker"):
+        runner.run_study(st, tmp_path, executor=docker_gone, log=lambda s: None)
+    assert len(calls) == 1
+    assert set(runner.collect(tmp_path / "t")["status"]) == {"pending"}
+
+
+def test_provenance_recorded_per_run_and_mixed_commits_warned(monkeypatch, tmp_path):
+    calls, logs = [], []
+    monkeypatch.setattr(runner, "_git_info", lambda: ("aaa", False))
+    study_dir = runner.run_study(_study(n=2), tmp_path, executor=_fake_ok(calls), log=lambda s: None)
+    (sorted((study_dir / "runs").iterdir())[0] / "metrics.json").unlink()  # one run left unfinished
+    monkeypatch.setattr(runner, "_git_info", lambda: ("bbb", True))
+    runner.run_study(_study(n=2), tmp_path, executor=_fake_ok(calls), log=lambda s: None)
+    df = runner.collect(study_dir, log=logs.append)
+    assert sorted(df["git_commit"].unique()) == ["aaa", "bbb"]
+    assert any("WARNING" in line and "2 code versions" in line for line in logs)
+    history = json.loads((study_dir / "manifest.json").read_text())["history"]
+    assert [h["git_commit"] for h in history] == ["aaa", "bbb"]

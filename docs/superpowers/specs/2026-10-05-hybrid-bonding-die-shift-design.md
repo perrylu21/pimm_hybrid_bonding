@@ -124,7 +124,10 @@ each point bonds, after the bonder's alignment removes rigid translation/rotatio
 - BCs: `die_top` held at `T_head` (bond head); `wafer_bottom` held at `T_chuck` (chuck);
   other faces adiabatic.
 - Time window: `[0, t_end]`, `t_end = r_max / v_wave` where `r_max` is the largest distance from
-  the wave origin to a die corner. Backward Euler, `n_t = 20` steps (convergence-checked).
+  the wave origin to a die corner. Backward Euler, `n_t = 20` steps on a geometric grid from
+  `T_FIRST = 1e-6 s` to `t_end` (the thermal transient after contact, ~1e-5–1e-2 s, is far
+  shorter than the wave, ~0.1 s; a uniform grid made `t_x` change sign with `n_t`). At
+  production numerics `t_x` is within 0.002 nm of `n_t = 40` (convergence-checked).
 - Properties: Si `k = 150 W/(m·K)`, `ρ = 2330 kg/m³`, `c_p = 700 J/(kg·K)`; bond layers by
   volume-weighted mixing with dielectric `k_d = 1.4 W/(m·K)` and Cu `k = 400 W/(m·K)`.
 
