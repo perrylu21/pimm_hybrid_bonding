@@ -15,7 +15,7 @@ from hbsim import params, physics, postprocess  # noqa: E402
 
 CASES = {
     "default": {},
-    "thin_layer": {"t_bond": 0.05, "t_die": 30.0, "L_die": 20.0, "bow_h": 5.0},
+    "thin_layer": {"t_bond": 0.05, "t_die": 30.0, "L_die": 20.0, "kappa": 0.1}  # 5 um bow on 20 mm,
 }
 LEVELS = {"mesh_n": [12, 20, 28], "nz_die": [2, 4, 6], "nz_wafer": [2, 4, 6], "n_t": [10, 20, 40]}
 KEYS = ("m_x", "d_max")

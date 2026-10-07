@@ -28,7 +28,7 @@ Design spec: `docs/superpowers/specs/2026-10-05-hybrid-bonding-die-shift-design.
 | `hbsim/sensitivity.py` | Sobol indices with SALib |
 | `hbsim/figures.py` | Paper figures (PDF) |
 | `cli.py` | Command-line entry point |
-| `studies/*.yaml` | Study definitions (`*_fast.yaml`: quick 512-run route) |
+| `studies/*.yaml` | Study definitions (`*_fast.yaml`: quick 1,024-run route) |
 | `results/<study>/` | Run folders, `dataset.parquet`, `manifest.json`, surrogate, figures (not in git) |
 | `legacy/epoxy_squeeze_flow/` | Earlier epoxy squeeze-flow scripts, kept for reference |
 
@@ -51,11 +51,21 @@ Design spec: `docs/superpowers/specs/2026-10-05-hybrid-bonding-die-shift-design.
    uv pip install --python .venv/bin/python -r requirements.txt
    ```
 
-## Quick route: 512-run study (recommended first)
+## Quick route: 1,024-run study (recommended first)
 
-512 training runs on the coarser mesh (`mesh_n` 12, within 0.2% of the finest mesh) instead of
-2,048 on the default mesh. Total time is about 1.5–2 h instead of about 14 h. If the surrogate is
+1,024 training runs on the coarser mesh (`mesh_n` 12, within 0.2% of the finest mesh) instead of
+2,048 on the default mesh. Total time is about 2.5–3 h instead of about 14 h. If the surrogate is
 accurate enough (step 5), use these results; otherwise extend the sweep (step 6).
+
+The swept inputs use the temperature difference `dT_head = T_head − T_chuck` and the die
+curvature `kappa` (1/m; bow height = kappa·L²/8). Results made before this change (with `T_head`
+and `bow_h` inputs) are not compatible: move them aside before step 3:
+
+```bash
+mkdir -p results/old_T_head_bow_h
+mv results/main_sweep_fast results/holdout_fast results/pilot results/old_T_head_bow_h/ 2>/dev/null
+mv results/lines_* results/old_T_head_bow_h/ 2>/dev/null
+```
 
 Run every command from the project folder:
 
@@ -79,13 +89,13 @@ docker run --rm -v "$PWD":/work -w /work dolfinx/dolfinx:stable python3 -m pytes
 
 Both should end with `passed` and no `failed`.
 
-**Step 3. Training set: 512 runs (~1–1.5 h).**
+**Step 3. Training set: 1,024 runs (~2–2.5 h).**
 
 ```bash
 .venv/bin/python cli.py run studies/main_sweep_fast.yaml
 ```
 
-Progress prints one line per run (`[main_sweep_fast] 37/512 <run_id> ok`). With 8 GB of Docker
+Progress prints one line per run (`[main_sweep_fast] 37/1024 <run_id> ok`). With 8 GB of Docker
 memory it runs 3 in parallel. You can stop with Ctrl-C and rerun the same command later: finished
 runs are kept. When it ends, check that nothing failed:
 
@@ -93,7 +103,7 @@ runs are kept. When it ends, check that nothing failed:
 .venv/bin/python cli.py collect results/main_sweep_fast
 ```
 
-Expected: `ok    512`. If some show `failed`, read `results/main_sweep_fast/runs/<run_id>/run.log`,
+Expected: `ok    1024`. If some show `failed`, read `results/main_sweep_fast/runs/<run_id>/run.log`,
 then rerun them with `.venv/bin/python cli.py run studies/main_sweep_fast.yaml --retry-failed`.
 
 **Step 4. Test set: 128 runs (~15–20 min).** These are never used for training; they measure how
@@ -113,7 +123,7 @@ Expected: `ok    128`.
 ```
 
 It prints the holdout accuracy of each output, for example `m_x  R2=0.9950  RMSE=2.1`. Then look
-at the learning curve (holdout error at 128, 256 and 512 training runs):
+at the learning curve (holdout error at 128, 256, 512 and 1,024 training runs):
 
 ```bash
 .venv/bin/python -c "
@@ -125,15 +135,15 @@ print(c[c.output.isin(['m_x', 'd_max'])].pivot(index='n_train', columns='output'
 The surrogate is good enough when both hold:
 
 - `R2` ≥ 0.95 for `m_x` and `d_max`.
-- RMSE at 512 is less than 10% lower than at 256 (the curve has flattened, so more runs would not
+- RMSE at 1,024 is less than 10% lower than at 512 (the curve has flattened, so more runs would not
   help much).
 
 The Gaussian-process comparison scores are in `results/main_sweep_fast/surrogate/metrics.json`
 under `"gp"`.
 
-**Step 6. Only if step 5 fails: extend to 1,024 runs (~1–1.5 h more).** In
-`studies/main_sweep_fast.yaml`, change `n: 512` to `n: 1024`, then rerun steps 3 and 5. The first
-512 runs are reused, so only the new 512 execute.
+**Step 6. Only if step 5 fails: extend to 2,048 runs (~2–2.5 h more).** In
+`studies/main_sweep_fast.yaml`, change `n: 1024` to `n: 2048`, then rerun steps 3 and 5. The first
+1,024 runs are reused, so only the new 1,024 execute.
 
 **Step 7. Sensitivity analysis (~1 min).**
 
@@ -152,7 +162,8 @@ total effect, `interaction` = `ST − S1`). The full tables are written to
 ```
 
 PDFs are written to `results/main_sweep_fast/figures/`: parity plots, Sobol bars, pairwise
-interaction heatmaps, learning curve, and two process-window maps.
+interaction heatmaps, learning curve, and two process-window maps (`dT_head` × `kappa`,
+`kappa` × `k_head`).
 
 **Step 9. (Optional, ~30 min) FEM trend checks.** One-at-a-time FEM sweeps of five parameters,
 drawn against the surrogate's prediction:
@@ -207,14 +218,14 @@ mem_per_run_gb: 3.6          # peak memory per run; parallel runs are capped to 
 timeout_s: 600
 image: dolfinx/dolfinx@sha256:...
 params:
-  T_head: {range: [30, 80]}    # narrow a sweep range (must lie inside the schema range)
+  dT_head: {range: [10, 40]}   # narrow a sweep range (must lie inside the schema range)
   t_bond: {value: 0.2}         # pin a parameter
 numerics:
   mesh_n: 28                   # override a numerical setting
 ```
 
 Parameters not listed under `params` are swept over their full schema range. For a line study:
-`sampler: {type: line, param: T_head, n: 15}` — other parameters stay at their defaults.
+`sampler: {type: line, param: dT_head, n: 15}` — other parameters stay at their defaults.
 
 ## Outputs per run
 

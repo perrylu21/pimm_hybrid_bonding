@@ -21,7 +21,7 @@ def test_successful_run_writes_all_outputs(tmp_path):
 
 
 def test_invalid_params_recorded_as_failure(tmp_path):
-    (tmp_path / "params.json").write_text(json.dumps({**params.defaults(), "T_head": 500.0}))
+    (tmp_path / "params.json").write_text(json.dumps({**params.defaults(), "dT_head": 500.0}))
     res = run_one.execute(tmp_path)
     assert res["status"] == "failed" and "outside" in res["error"]
     assert json.loads((tmp_path / "metrics.json").read_text())["status"] == "failed"

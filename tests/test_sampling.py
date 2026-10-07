@@ -36,4 +36,4 @@ def test_line_varies_one_param_over_range():
     vals = [r["v_wave"] for r in rows]
     assert math.isclose(vals[0], 5.0) and math.isclose(vals[-1], 200.0)
     assert math.isclose(vals[2], math.sqrt(5.0 * 200.0))  # log-scale midpoint
-    assert all(r["T_head"] == P.SWEPT["T_head"].default for r in rows)
+    assert all(r["dT_head"] == P.SWEPT["dT_head"].default for r in rows)

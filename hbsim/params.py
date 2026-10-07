@@ -20,8 +20,8 @@ class ParamSpec:
 
 
 SWEPT = {s.name: s for s in [
-    ParamSpec("T_head", "degC", 20.0, 100.0, 60.0),
-    ParamSpec("T_chuck", "degC", 20.0, 100.0, 40.0),
+    ParamSpec("dT_head", "degC", 0.0, 60.0, 20.0),   # T_head - T_chuck
+    ParamSpec("T_chuck", "degC", 20.0, 60.0, 40.0),
     ParamSpec("v_wave", "mm/s", 5.0, 200.0, 30.0, "log"),
     ParamSpec("L_die", "mm", 2.0, 20.0, 10.0),
     ParamSpec("t_die", "um", 30.0, 775.0, 100.0, "log"),
@@ -31,7 +31,7 @@ SWEPT = {s.name: s for s in [
     ParamSpec("alpha_d", "ppm/K", 0.5, 4.0, 1.5),
     ParamSpec("phi_cu", "-", 0.05, 0.4, 0.2),
     ParamSpec("alpha_chuck", "ppm/K", 0.5, 5.0, 2.6),
-    ParamSpec("bow_h", "um", -5.0, 5.0, 0.0),
+    ParamSpec("kappa", "1/m", -0.5, 0.5, 0.0),       # die curvature; > 0: bottom convex
     ParamSpec("F_bond", "N", 1.0, 50.0, 10.0),
     ParamSpec("k_head", "MPa/mm", 1e-3, 1e4, 1.0, "log"),
     ParamSpec("x0", "L_die", 0.0, 0.3, 0.0),
@@ -84,8 +84,8 @@ def validate(p):
         tol = 1e-9 * max(abs(s.low), abs(s.high), 1.0)
         if not (s.low - tol <= v <= s.high + tol):
             raise ValueError(f"{n}={v} outside [{s.low}, {s.high}] {s.unit}")
-    # Geometric sanity is guaranteed by the schema ranges: t_die >= 30 * t_bond and
-    # |bow_h| <= L_die / 400, so no separate cross-parameter checks are needed.
+    # Geometric sanity is guaranteed by the schema ranges (t_die >= 30 * t_bond), so no
+    # separate cross-parameter checks are needed.
     if int(p["mesh_n"]) != p["mesh_n"] or p["mesh_n"] < 4 or p["mesh_n"] % 2:
         raise ValueError(f"mesh_n must be an even integer >= 4, got {p['mesh_n']}")
     for n in ("n_ring", "nz_die", "nz_wafer", "n_t", "n_pads", "deg"):

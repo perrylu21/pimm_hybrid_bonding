@@ -1,8 +1,0 @@
-# One-at-a-time FEM sweep of bow_h (others at schema defaults) for trend figures and surrogate checks.
-name: lines_bow_h
-sampler: {type: line, param: bow_h, n: 15}
-workers: 4
-threads_per_worker: 2
-timeout_s: 600
-image: dolfinx/dolfinx@sha256:2ae4bfbc0d9077268880faf04c72750528bee986c94ab223a2c159969bd56fa8
-params: {}

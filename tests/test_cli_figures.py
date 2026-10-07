@@ -37,12 +37,12 @@ def test_train_sensitivity_figures(tmp_path):
     tr, te, ln = tmp_path / "train", tmp_path / "test", tmp_path / "line"
     _write_study(tr, 64, 1)
     _write_study(te, 32, 2)
-    _write_study(ln, 8, 3, line_param="T_head")
+    _write_study(ln, 8, 3, line_param="dT_head")
     out = _cli("train", "--train", str(tr), "--test", str(te), "--n-models", "1")
     assert "m_x" in out and (tr / "surrogate" / "metrics.json").exists()
     _cli("sensitivity", "--surrogate", str(tr / "surrogate"), "--n-base", "64")
     assert (tr / "surrogate" / "sobol_second_order.csv").exists()
     _cli("figures", "--surrogate", str(tr / "surrogate"), "--test", str(te), "--lines", str(ln))
     figs = {p.name for p in (tr / "figures").iterdir()}
-    assert {"parity.pdf", "sobol_m_x.pdf", "s2_d_max.pdf", "window_bow_khead.pdf", "window_Thead_bow.pdf",
-            "line_T_head.pdf"} <= figs
+    assert {"parity.pdf", "sobol_m_x.pdf", "s2_d_max.pdf", "window_kappa_khead.pdf", "window_dT_kappa.pdf",
+            "line_dT_head.pdf"} <= figs

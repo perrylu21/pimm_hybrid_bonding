@@ -15,7 +15,7 @@ DIELECTRIC = {"nu": 0.2, "k": 1.4e-3, "rho_cp": 1.6e-3}  # E and alpha are swept
 def to_model(p):
     """Convert a resolved parameter dict (user units) to model units (mm, MPa, 1/K)."""
     return {
-        "T_head": p["T_head"],
+        "T_head": p["T_chuck"] + p["dT_head"],
         "T_chuck": p["T_chuck"],
         "v_wave": p["v_wave"],
         "L": p["L_die"],
@@ -26,7 +26,7 @@ def to_model(p):
         "alpha_d": p["alpha_d"] * 1e-6,
         "phi_cu": p["phi_cu"],
         "alpha_chuck": p["alpha_chuck"] * 1e-6,
-        "bow_h": p["bow_h"] * 1e-3,
+        "kappa": p["kappa"] * 1e-3,  # 1/m -> 1/mm
         "pressure": p["F_bond"] / p["L_die"] ** 2,
         "k_head": p["k_head"],
         "x0": p["x0"] * p["L_die"],
@@ -48,8 +48,8 @@ def bond_layer(m):
 
 
 def curvature(m):
-    """Die curvature [1/mm] from center-to-edge bow height h: kappa = 8 h / L^2."""
-    return 8.0 * m["bow_h"] / m["L"] ** 2
+    """Die curvature [1/mm] (> 0: die bottom convex toward the wafer). Bow height h = kappa L^2 / 8."""
+    return m["kappa"]
 
 
 def analytic_baseline(p):

@@ -120,7 +120,7 @@ each point bonds, after the bonder's alignment removes rigid translation/rotatio
 ### 3.3 Step 1 — transient thermal
 
 - Domain: full mesh (die + both bond layers + wafer), perfect thermal contact at the interface.
-- Initial condition: die (+ its bond layer) at `T_head`; wafer (+ its bond layer) at `T_chuck`.
+- Initial condition (`T_head = T_chuck + dT_head`): die (+ its bond layer) at `T_head`; wafer (+ its bond layer) at `T_chuck`.
 - BCs: `die_top` held at `T_head` (bond head); `wafer_bottom` held at `T_chuck` (chuck);
   other faces adiabatic.
 - Time window: `[0, t_end]`, `t_end = r_max / v_wave` where `r_max` is the largest distance from
@@ -141,9 +141,11 @@ Linear isotropic elasticity with eigenstrain `ε* = α·(T − T_ref)·I + ε_bo
 
 - Die bow: through-thickness eigenstrain gradient `ε_bow = −κ·(z − z_mid)·(e_x⊗e_x + e_y⊗e_y)`
   over the whole die body (bond layer + Si), `z_mid` = mid-height of the die body. This field is
-  compatible, so a free die is stress-free with curvature κ. `κ = 8·h / L_die²` from the bow
-  height `h`; positive h = die bottom convex (center protrudes toward the wafer), which stretches
-  the die interface by `κ·(t_die + t_bond)/2`.
+  compatible, so a free die is stress-free with curvature κ. κ is swept directly (input `kappa`,
+  1/m; bow height `h = κ·L_die²/8`), so bow strain does not scale with die size; positive κ = die
+  bottom convex (center protrudes toward the wafer), which stretches the die interface by
+  `κ·(t_die + t_bond)/2`. (Sweeping bow height instead made small thick dies reach unphysical
+  curvatures and turned `bow_h × L_die` into an artificial interaction; changed 2026-10-07.)
 - Die BCs: the die is otherwise free. In-plane rigid modes are removed by statically determinate
   point pins on the interface plane: (0,0,0) in x, y; (L/2,0,0) in y. With `k_head > 0` the head
   spring removes the out-of-plane modes; only for `k_head = 0` (verification) are `u_z` pins added
@@ -184,7 +186,7 @@ Verification runs call `physics.simulate(p, lock="t0")`, which locks every pad a
 (t = 0, both bodies at their uniform initial temperatures) — the `v_wave → ∞` limit — and may use
 values outside the sweep ranges (e.g. `F_bond = 0`, `phi_cu = 0`).
 
-- Uniform thermal mismatch: lock at t = 0, `bow_h = 0`, `F_bond = 0`, bond layers set to Si properties
+- Uniform thermal mismatch: lock at t = 0, `kappa = 0`, `F_bond = 0`, bond layers set to Si properties
   (`E_d = 130 GPa`, `alpha_d = 2.6 ppm/K`, `phi_cu = 0`), `alpha_chuck = 2.6 ppm/K`. Then each
   body expands uniformly and the corner overlay magnitude equals
   `α_Si·(T_head − T_chuck)·(L_die/2)·√2`. Tolerance 1%.
@@ -202,8 +204,8 @@ values outside the sweep ranges (e.g. `F_bond = 0`, `phi_cu = 0`).
 
 | Group | Name | Unit | Range | Scale |
 |---|---|---|---|---|
-| Thermal | `T_head` | °C | 20–100 | linear |
-| Thermal | `T_chuck` | °C | 20–100 | linear |
+| Thermal | `dT_head` (= `T_head − T_chuck`) | °C | 0–60 | linear |
+| Thermal | `T_chuck` | °C | 20–60 | linear |
 | Thermal | `v_wave` | mm/s | 5–200 | log |
 | Geometry | `L_die` | mm | 2–20 | linear |
 | Geometry | `t_die` | µm | 30–775 | log |
@@ -213,7 +215,7 @@ values outside the sweep ranges (e.g. `F_bond = 0`, `phi_cu = 0`).
 | Materials | `alpha_d` | ppm/K | 0.5–4 | linear |
 | Materials | `phi_cu` | – | 0.05–0.4 | linear |
 | Materials | `alpha_chuck` | ppm/K | 0.5–5 | linear |
-| Mechanical | `bow_h` | µm | −5 to +5 | linear |
+| Mechanical | `kappa` (die curvature; bow height = κ·L²/8) | 1/m | −0.5 to +0.5 | linear |
 | Mechanical | `F_bond` | N | 1–50 | linear |
 | Mechanical | `k_head` | MPa/mm | 10⁻³–10⁴ | log |
 | Mechanical | `x0`, `y0` | fraction of `L_die` | 0–0.3 | linear |
@@ -252,12 +254,12 @@ workers: 4
 timeout_s: 600
 image: dolfinx/dolfinx@sha256:<digest>
 params:
-  T_head:  {range: [20, 100], unit: degC}
+  dT_head: {range: [0, 60], unit: degC}
   v_wave:  {range: [5, 200], unit: mm/s, scale: log}
   t_bond:  {value: 0.2, unit: um}            # pinned
 ```
 
-For `line` studies: `sampler: {type: line, param: T_head, n: 15}`; other parameters at their
+For `line` studies: `sampler: {type: line, param: dT_head, n: 15}`; other parameters at their
 defaults.
 
 ## 5. Surrogate and Sensitivity
@@ -293,7 +295,7 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
   (~0.1 s), so v_wave interactions may turn out weak — report whichever the data show.
 - Figures: stacked bar of `S_i` and `S_Ti − S_i` per input; `S_ij` heatmap per output.
 - Process-window contour maps of `d_max` over chosen parameter pairs — default pairs
-  (`T_head`, `bow_h`) with `T_chuck` at its default (so `T_head` sets ΔT), and (`bow_h`, `k_head`) —
+  (`dT_head`, `kappa`) and (`kappa`, `k_head`) —
   with a configurable spec line (default 100 nm).
 - Line-study figures: FEM points with surrogate prediction band overlaid.
 
@@ -304,7 +306,7 @@ Evaluation on `holdout`: R² and RMSE per output, parity plots, learning curve
   `metrics.json` with `status: failed` and the error message; the sweep continues.
 - Pre-solve validation: every parameter present, finite, and inside its declared range; numerics
   are positive integers (`mesh_n` even). Geometric sanity is guaranteed by the ranges
-  (`t_die ≥ 30·t_bond`, `|bow_h| ≤ L_die/400`), so no cross-parameter checks are needed.
+  (`t_die ≥ 30·t_bond`), so no cross-parameter checks are needed.
 - `cli.py run` skips runs with an existing `status: ok`; `--retry-failed` reruns failed ones.
 - `dataset.parquet` is always rebuilt from `runs/`; per-run files are the source of truth.
 - Surrogate training excludes failed runs and logs how many were excluded.

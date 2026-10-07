@@ -19,11 +19,17 @@ def test_turner_cte_lies_between_constituents():
 
 
 def test_analytic_baseline_thermal_and_bow_terms():
-    p = {**P.defaults(), "T_head": 60.0, "T_chuck": 40.0, "alpha_chuck": 2.6, "bow_h": 0.0}
+    p = {**P.defaults(), "dT_head": 20.0, "T_chuck": 40.0, "alpha_chuck": 2.6, "kappa": 0.0}
     assert math.isclose(M.analytic_baseline(p)["m_x"], 2.6 * 20.0, rel_tol=1e-12)
-    q = {**P.defaults(), "T_head": 20.0, "T_chuck": 20.0, "bow_h": 5.0, "L_die": 10.0,
+    q = {**P.defaults(), "dT_head": 0.0, "T_chuck": 20.0, "kappa": 0.4, "L_die": 10.0,
          "t_die": 100.0, "t_bond": 0.2}
-    kappa = 8 * 5e-3 / 10.0 ** 2
+    kappa = 0.4e-3  # 1/mm
     assert math.isclose(M.analytic_baseline(q)["m_x"], kappa * (0.1 + 0.0002) / 2 * 1e6, rel_tol=1e-12)
     b = M.analytic_baseline(q)
     assert math.isclose(b["d_max"], abs(b["m_x"]) * 1e-6 * 5.0 * math.sqrt(2) * 1e6, rel_tol=1e-12)
+
+
+def test_to_model_derives_head_temperature_and_curvature():
+    m = M.to_model({**P.defaults(), "dT_head": 25.0, "T_chuck": 30.0, "kappa": -0.3})
+    assert m["T_head"] == 55.0 and m["T_chuck"] == 30.0
+    assert math.isclose(M.curvature(m), -0.3e-3)  # 1/m -> 1/mm

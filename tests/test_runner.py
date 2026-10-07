@@ -19,7 +19,7 @@ def _fake_ok(calls):
         p = json.loads((run_dir / "params.json").read_text())
         (run_dir / "metrics.json").write_text(json.dumps(
             {"status": "ok", "error": None, "runtime_s": 0.1, "n_dofs": 1,
-             "t_x": 0.0, "t_y": 0.0, "theta": 0.0, "m_x": p["T_head"], "m_y": 0.0,
+             "t_x": 0.0, "t_y": 0.0, "theta": 0.0, "m_x": p["dT_head"], "m_y": 0.0,
              "resid_3sigma": 0.0, "d_max": 1.0}))
         return subprocess.CompletedProcess([], 0, "", "")
     return run

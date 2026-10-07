@@ -14,7 +14,7 @@ def _fake_fem(df):
     """Synthetic outputs: analytic baseline + smooth correction with a bow x k_head interaction."""
     y = surrogate.baseline(df)
     u = surrogate.encode(df)
-    corr = -10 * u[:, I.index("bow_h")] * u[:, I.index("k_head")] + 3 * np.sin(3 * u[:, 0])
+    corr = -10 * u[:, I.index("kappa")] * u[:, I.index("k_head")] + 3 * np.sin(3 * u[:, 0])
     y[:, OUTPUTS.index("m_x")] += corr
     y[:, OUTPUTS.index("m_y")] += corr
     y[:, OUTPUTS.index("t_x")] += 0.5 * u[:, I.index("x0")]
@@ -89,7 +89,7 @@ def test_load_rejects_changed_input_range(tmp_path, monkeypatch):
     from hbsim import params
     m = surrogate.Surrogate.fit(_dataset(64, 1), n_models=1, max_epochs=5, patience=2, log=lambda s: None)
     m.save(tmp_path)
-    widened = params.ParamSpec("bow_h", "um", -10.0, 10.0, 0.0)
-    monkeypatch.setitem(params.SWEPT, "bow_h", widened)
-    with pytest.raises(ValueError, match="bow_h"):
+    widened = params.ParamSpec("kappa", "1/m", -1.0, 1.0, 0.0)
+    monkeypatch.setitem(params.SWEPT, "kappa", widened)
+    with pytest.raises(ValueError, match="kappa"):
         surrogate.Surrogate.load(tmp_path)

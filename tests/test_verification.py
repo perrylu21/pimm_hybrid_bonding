@@ -15,29 +15,29 @@ def _metrics(p, lock):
 
 def test_uniform_thermal_mismatch_matches_closed_form():
     p = {**params.defaults(), "E_d": 130.0, "alpha_d": 2.6, "phi_cu": 0.0, "alpha_chuck": 2.6,
-         "bow_h": 0.0, "F_bond": 0.0, "T_head": 60.0, "T_chuck": 40.0}
+         "kappa": 0.0, "F_bond": 0.0, "dT_head": 20.0, "T_chuck": 40.0}
     _, m = _metrics(p, "t0")
-    expected_ppm = 2.6 * (60.0 - 40.0)
+    expected_ppm = 2.6 * 20.0  # alpha_Si * dT_head
     assert math.isclose(m["m_x"], expected_ppm, rel_tol=0.01)
     corner = 0.49 * p["L_die"] * math.sqrt(2)
     assert math.isclose(m["d_max"], expected_ppm * 1e-6 * corner * 1e6, rel_tol=0.01)
 
 
 def test_free_die_bow_matches_plate_solution():
-    p = {**params.defaults(), "T_head": 20.0, "T_chuck": 20.0, "bow_h": 5.0, "F_bond": 0.0, "k_head": 0.0}
+    p = {**params.defaults(), "dT_head": 0.0, "T_chuck": 20.0, "kappa": 0.4, "F_bond": 0.0, "k_head": 0.0}
     _, m = _metrics(p, "t0")
     assert math.isclose(m["m_x"], materials.analytic_baseline(p)["m_x"], rel_tol=0.01)
 
 
 def test_rigid_head_flattens_bow():
-    base = {**params.defaults(), "T_head": 20.0, "T_chuck": 20.0, "bow_h": 5.0, "F_bond": 0.0}
+    base = {**params.defaults(), "dT_head": 0.0, "T_chuck": 20.0, "kappa": 0.4, "F_bond": 0.0}
     _, free = _metrics({**base, "k_head": 0.0}, "t0")
     _, rigid = _metrics({**base, "k_head": 1e4}, "t0")
     assert abs(rigid["m_x"]) < 0.02 * abs(free["m_x"])
 
 
 def test_zero_load_gives_zero_overlay():
-    p = {**params.defaults(), "T_head": 20.0, "T_chuck": 20.0, "bow_h": 0.0, "F_bond": 0.0}
+    p = {**params.defaults(), "dT_head": 0.0, "T_chuck": 20.0, "kappa": 0.0, "F_bond": 0.0}
     r, _ = _metrics(p, "wave")
     assert np.abs(r["d"]).max() < 1e-12
 

@@ -71,8 +71,8 @@ def cmd_figures(a):
             figures.s2_heatmap(so, name, out / f"s2_{name}.pdf")
     if (sdir / "learning_curve.csv").exists():
         figures.learning_curve_plot(pd.read_csv(sdir / "learning_curve.csv"), out / "learning_curve.pdf")
-    figures.process_window(model, "T_head", "bow_h", out / "window_Thead_bow.pdf", spec=a.spec)
-    figures.process_window(model, "bow_h", "k_head", out / "window_bow_khead.pdf", spec=a.spec)
+    figures.process_window(model, "dT_head", "kappa", out / "window_dT_kappa.pdf", spec=a.spec)
+    figures.process_window(model, "kappa", "k_head", out / "window_kappa_khead.pdf", spec=a.spec)
     for line_dir in a.lines:
         df = _dataset(line_dir)
         param = json.loads((Path(line_dir) / "manifest.json").read_text())["study"]["sampler"]["param"]
