@@ -227,15 +227,63 @@ numerics:
 Parameters not listed under `params` are swept over their full schema range. For a line study:
 `sampler: {type: line, param: dT_head, n: 15}` — other parameters stay at their defaults.
 
-## Outputs per run
+## Parameter glossary
+
+Defined in code at `hbsim/params.py` (`SWEPT`, `NUMERICS`), `hbsim/materials.py` (constants) and
+`hbsim/postprocess.py` (`OUTPUTS`); the physics is in the design spec, §3.
+
+### Swept inputs (16)
+
+| Name | Meaning | Unit | Range | Default | Where it acts in the model |
+|------|---------|------|-------|---------|----------------------------|
+| `dT_head` | Bond-head temperature minus chuck temperature (`T_head = T_chuck + dT_head`) | °C | 0–60 | 20 | Die starts at `T_head`; die top held at `T_head` during bonding |
+| `T_chuck` | Chuck (wafer) temperature | °C | 20–60 | 40 | Wafer starts at `T_chuck`; wafer bottom held at `T_chuck`; sets wafer and chuck thermal expansion |
+| `v_wave` | Bond-wave speed: how fast the bonded area spreads from its start point (log scale) | mm/s | 5–200 | 30 | A pad locks when the wave reaches it: lock time = distance from start / `v_wave` |
+| `L_die` | Die edge length (square die) | mm | 2–20 | 10 | Die size; wafer patch is `2 × L_die` wide |
+| `t_die` | Die silicon thickness (log scale) | µm | 30–775 | 100 | Die stiffness; with `kappa`, sets bending strain `kappa·t_die/2` |
+| `t_wafer` | Wafer silicon thickness | µm | 300–775 | 775 | Wafer stiffness and heat path to the chuck |
+| `t_bond` | Thickness of each bond layer (dielectric + Cu pads), on die and on wafer (log scale) | µm | 0.05–1 | 0.2 | Thin layer on each bonding surface |
+| `E_d` | Young's modulus of the bond dielectric (SiO₂ ≈ 70, SiCN ≈ 150–200) | GPa | 60–200 | 100 | Bond-layer stiffness (mixed with Cu by `phi_cu`) |
+| `alpha_d` | Thermal expansion of the bond dielectric | ppm/K | 0.5–4 | 1.5 | Bond-layer expansion (mixed with Cu by `phi_cu`) |
+| `phi_cu` | Cu pad area fraction in the bond layer | – | 0.05–0.4 | 0.2 | Mixing weight between dielectric and Cu properties |
+| `alpha_chuck` | Thermal expansion of the chuck (Si = 2.6) | ppm/K | 0.5–5 | 2.6 | Wafer bottom moves with the chuck: `alpha_chuck·(T_chuck − 20 °C)` |
+| `kappa` | Die curvature before bonding; > 0 means the die bottom bulges toward the wafer. Bow height = `kappa·L_die²/8` | 1/m | −0.5 to +0.5 | 0 | Stretches (> 0) or compresses (< 0) the die bottom surface by `kappa·t_die/2` |
+| `F_bond` | Bond force applied by the head | N | 1–50 | 10 | Pressure `F_bond / L_die²` on die top and bottom (Poisson effect) |
+| `k_head` | Bond-head stiffness against die bending: ≈ 0 free die, large = rigid flat head (log scale) | MPa/mm | 10⁻³–10⁴ | 1 | Spring on the die top; a stiff head flattens a curved die |
+| `x0`, `y0` | Bond-wave start point, offset from die center as a fraction of `L_die` (models head tilt) | – | 0–0.3 | 0 | Origin of the bond wave |
+
+### Fixed constants (not swept)
+
+| Constant | Value | Notes |
+|----------|-------|-------|
+| Reference temperature `T_REF` | 20 °C | Pads are patterned and aligned at this temperature; expansion is measured from it |
+| Silicon (die and wafer) | E 130 GPa, ν 0.28, α 2.6 ppm/K, k 150 W/(m·K), ρc_p 1.63 MJ/(m³·K) | Isotropic |
+| Copper (bond pads) | E 120 GPa, ν 0.34, α 16.7 ppm/K, k 400 W/(m·K), ρc_p 3.45 MJ/(m³·K) | |
+| Bond dielectric | ν 0.2, k 1.4 W/(m·K), ρc_p 1.6 MJ/(m³·K) | E and α are swept (`E_d`, `alpha_d`) |
+| Bond-layer mixing | E, ν, k, ρc_p by volume fraction; α by stiffness-weighted average (Turner) | Weight = `phi_cu` |
+
+### Numerical settings (`numerics:` in a study file)
+
+| Name | Meaning | Default |
+|------|---------|---------|
+| `mesh_n` | Elements along the die edge (even). `*_fast.yaml` studies use 12 | 20 |
+| `n_ring` | Elements across the wafer margin around the die | 6 |
+| `nz_die`, `nz_wafer` | Elements through the die / wafer silicon thickness | 4, 4 |
+| `n_t` | Thermal time steps during the bond wave (geometric, starting at 1 µs) | 20 |
+| `margin_frac` | Wafer margin on each side of the die, as a fraction of `L_die` | 0.5 |
+| `deg` | Displacement element order (2 = quadratic; 1 locks in bending) | 2 |
+| `n_pads` | Pad grid where overlay is measured: `n_pads × n_pads` points covering the die | 21 |
+
+### Outputs per run
 
 | Output | Unit | Meaning |
 |--------|------|---------|
-| `t_x`, `t_y` | nm | Translation of die pads relative to wafer pads |
-| `theta` | µrad | Rotation |
-| `m_x`, `m_y` | ppm | Magnification (scale mismatch) |
-| `resid_3sigma` | nm | 3σ of the overlay left after removing the linear fit |
-| `d_max` | nm | Largest pad misalignment |
+| `t_x`, `t_y` | nm | Translation of die pads relative to wafer pads. Set mostly by the model's die-center anchor; not reliable as die-shift results |
+| `theta` | µrad | Rotation (same caveat as translation) |
+| `m_x`, `m_y` | ppm | Magnification: scale mismatch between die and wafer pad patterns. 1 ppm = 1 nm per mm from the die center |
+| `resid_3sigma` | nm | 3σ of the misalignment left after removing translation, rotation and magnification (non-uniform distortion) |
+| `d_max` | nm | Largest pad misalignment anywhere on the die |
 
-Bonder placement offset and rotation error are not simulated; add them afterwards with
-`hbsim.postprocess.apply_placement`.
+The bonder's alignment removes translation and rotation present before contact; everything
+measured after that comes from bonding. Bonder placement offset and rotation error are not
+simulated; add them afterwards with `hbsim.postprocess.apply_placement`.
