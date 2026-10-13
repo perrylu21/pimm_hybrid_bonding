@@ -38,7 +38,7 @@ def test_train_sensitivity_figures(tmp_path):
     _write_study(tr, 64, 1)
     _write_study(te, 32, 2)
     _write_study(ln, 8, 3, line_param="dT_head")
-    out = _cli("train", "--train", str(tr), "--test", str(te), "--n-models", "1")
+    out = _cli("train", "--train", str(tr), "--test", str(te), "--n-models", "1", "--gp")
     assert "m_x" in out and (tr / "surrogate" / "metrics.json").exists()
     _cli("sensitivity", "--surrogate", str(tr / "surrogate"), "--n-base", "64")
     assert (tr / "surrogate" / "sobol_second_order.csv").exists()
@@ -46,3 +46,32 @@ def test_train_sensitivity_figures(tmp_path):
     figs = {p.name for p in (tr / "figures").iterdir()}
     assert {"parity.pdf", "sobol_m_x.pdf", "s2_d_max.pdf", "window_kappa_khead.pdf", "window_dT_kappa.pdf",
             "line_dT_head.pdf"} <= figs
+
+
+
+def test_gp_sensitivity_and_figures_go_to_their_own_folder(tmp_path):
+    tr, te = tmp_path / "train", tmp_path / "test"
+    _write_study(tr, 64, 1)
+    _write_study(te, 32, 2)
+    _cli("train", "--train", str(tr), "--test", str(te), "--n-models", "1", "--gp")
+    assert (tr / "surrogate_gp" / "gp.pkl").exists()
+    _cli("sensitivity", "--surrogate", str(tr / "surrogate_gp"), "--n-base", "64")
+    assert (tr / "surrogate_gp" / "sobol_first_total.csv").exists()
+    _cli("figures", "--surrogate", str(tr / "surrogate_gp"), "--test", str(te))
+    assert {"parity.pdf", "sobol_m_x.pdf"} <= {p.name for p in (tr / "figures_gp").iterdir()}
+    assert not (tr / "figures").exists()  # MLP figures untouched
+
+
+def test_log_axis_shows_only_major_labels():
+    import matplotlib.pyplot as plt
+    from hbsim import figures
+    fig, ax = plt.subplots()
+    ax.plot([30, 775], [1, 2])
+    ax.set_xscale("log")
+    figures.log_axis(ax, "x")
+    fig.canvas.draw()
+    minor = [t.get_text() for t in ax.get_xticklabels(minor=True)]
+    major = [t.get_text() for t in ax.get_xticklabels() if t.get_text()]
+    plt.close(fig)
+    assert all(m == "" for m in minor)
+    assert 2 <= len(major) <= 8 and all("times" not in m and "^" not in m for m in major)

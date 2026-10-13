@@ -93,3 +93,32 @@ def test_load_rejects_changed_input_range(tmp_path, monkeypatch):
     monkeypatch.setitem(params.SWEPT, "kappa", widened)
     with pytest.raises(ValueError, match="kappa"):
         surrogate.Surrogate.load(tmp_path)
+
+
+def test_gp_save_load_and_model_detection(tmp_path):
+    df = _dataset(64, 1)
+    gp = surrogate.GPBaseline.fit(df)
+    gp.save(tmp_path / "gp")
+    mlp = surrogate.Surrogate.fit(df, n_models=1, max_epochs=5, patience=2, log=lambda s: None)
+    mlp.save(tmp_path / "mlp")
+    loaded = surrogate.load_model(tmp_path / "gp")
+    assert isinstance(loaded, surrogate.GPBaseline)
+    assert isinstance(surrogate.load_model(tmp_path / "mlp"), surrogate.Surrogate)
+    assert np.allclose(loaded.predict(df, with_std=False)[0], gp.predict(df, with_std=False)[0])
+
+
+def test_gp_predict_in_batches_matches_and_std_optional():
+    df, test = _dataset(64, 1), _dataset(50, 2)
+    gp = surrogate.GPBaseline.fit(df)
+    whole, none = gp.predict(test, with_std=False)
+    batched, std = gp.predict(test, batch=7)
+    assert none is None and np.allclose(whole, batched)
+    assert std.shape == whole.shape and np.all(std >= 0)
+
+
+def test_gp_load_rejects_changed_input_range(tmp_path, monkeypatch):
+    from hbsim import params
+    surrogate.GPBaseline.fit(_dataset(64, 1)).save(tmp_path)
+    monkeypatch.setitem(params.SWEPT, "kappa", params.ParamSpec("kappa", "1/m", -1.0, 1.0, 0.0))
+    with pytest.raises(ValueError, match="kappa"):
+        surrogate.GPBaseline.load(tmp_path)

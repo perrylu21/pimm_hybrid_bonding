@@ -4,7 +4,7 @@
   python cli.py run studies/pilot.yaml [--retry-failed]
   python cli.py collect results/pilot
   python cli.py train --train results/main_sweep --test results/holdout
-  python cli.py sensitivity --surrogate results/main_sweep/surrogate
+  python cli.py sensitivity --surrogate results/main_sweep/surrogate      (or .../surrogate_gp)
   python cli.py figures --surrogate results/main_sweep/surrogate --test results/holdout
 """
 import argparse
@@ -37,6 +37,7 @@ def cmd_train(a):
     report = {"surrogate": surrogate.evaluate(model, _dataset(a.test))}
     if a.gp:
         gp = surrogate.GPBaseline.fit(_dataset(a.train))
+        gp.save(out.parent / f"{out.name}_gp")
         report["gp"] = surrogate.evaluate(gp, _dataset(a.test))
     (out / "metrics.json").write_text(json.dumps(report, indent=2))
     if a.learning_curve:
@@ -48,8 +49,9 @@ def cmd_train(a):
 
 def cmd_sensitivity(a):
     from hbsim import sensitivity, surrogate
-    model = surrogate.Surrogate.load(a.surrogate)
-    ft, so = sensitivity.sobol_indices(lambda df: model.predict(df)[0], n_base=a.n_base, seed=a.seed)
+    model = surrogate.load_model(a.surrogate)  # MLP ensemble or GP, detected from the folder
+    ft, so = sensitivity.sobol_indices(lambda df: model.predict(df, with_std=False)[0],
+                                       n_base=a.n_base, seed=a.seed)
     ft.to_csv(Path(a.surrogate) / "sobol_first_total.csv", index=False)
     so.to_csv(Path(a.surrogate) / "sobol_second_order.csv", index=False)
     for name in ("m_x", "d_max"):
@@ -60,8 +62,9 @@ def cmd_sensitivity(a):
 def cmd_figures(a):
     from hbsim import figures, surrogate
     sdir = Path(a.surrogate)
-    out = figures.ensure_dir(a.out or sdir.parent / "figures")
-    model = surrogate.Surrogate.load(sdir)
+    model = surrogate.load_model(sdir)
+    is_gp = isinstance(model, surrogate.GPBaseline)
+    out = figures.ensure_dir(a.out or sdir.parent / ("figures_gp" if is_gp else "figures"))
     figures.parity(model, _dataset(a.test), out / "parity.pdf")
     ft_path, so_path = sdir / "sobol_first_total.csv", sdir / "sobol_second_order.csv"
     if ft_path.exists():

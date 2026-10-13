@@ -4,6 +4,7 @@ Host only (PyTorch, scikit-learn). Inputs are the swept parameters scaled to [0,
 schema ranges (log-scale parameters in log space), so scaling never depends on the data.
 """
 import json
+import pickle
 from pathlib import Path
 
 import numpy as np
@@ -113,8 +114,12 @@ class Surrogate:
             nets.append(net)
         return cls(nets, mean, std)
 
-    def predict(self, df):
-        """Return (mean, std) arrays of shape (n, len(OUTPUTS)) in output units."""
+    def predict(self, df, with_std=True):
+        """Return (mean, std) arrays of shape (n, len(OUTPUTS)) in output units.
+
+        std is the spread of the ensemble; it is cheap, so with_std is accepted for interface
+        compatibility with GPBaseline and ignored.
+        """
         X = torch.tensor(encode(df), dtype=torch.float32)
         with torch.no_grad():
             Z = np.stack([net(X).numpy() for net in self.nets])
@@ -133,12 +138,7 @@ class Surrogate:
     def load(cls, out_dir):
         out_dir = Path(out_dir)
         sc = json.loads((out_dir / "scalers.json").read_text())
-        if sc["inputs"] != INPUTS or sc["outputs"] != OUTPUTS:
-            raise ValueError("saved surrogate was trained with a different parameter/output list")
-        changed = [a[0] for a, b in zip(sc.get("input_specs", []), _input_specs()) if a != b]
-        if "input_specs" not in sc or changed:
-            raise ValueError(f"saved surrogate was trained with different input ranges/scales "
-                             f"({', '.join(changed) or 'not recorded'}); retrain it")
+        _check_schema(sc)
         nets = []
         for state in torch.load(out_dir / "model.pt"):
             net = _mlp(len(INPUTS), len(OUTPUTS))
@@ -166,15 +166,66 @@ class GPBaseline:
             gps.append(gp.fit(X, R[:, j]))
         return cls(gps)
 
-    def predict(self, df):
+    def predict(self, df, with_std=True, batch=20000):
+        """Return (mean, std) in output units; std is None when with_std is False.
+
+        Predicts in batches: a Sobol analysis needs ~557k points, and one kernel matrix against
+        the training set per batch keeps memory bounded. The GP standard deviation costs far more
+        than the mean, so callers that do not plot it should pass with_std=False.
+        """
         X = encode(df)
-        return baseline(df) + np.column_stack([gp.predict(X) for gp in self.gps]), None
+        means, stds = [], []
+        for i in range(0, len(X), batch):
+            xb = X[i:i + batch]
+            if with_std:
+                mb, sb = zip(*(gp.predict(xb, return_std=True) for gp in self.gps))
+                stds.append(np.column_stack(sb))
+            else:
+                mb = [gp.predict(xb) for gp in self.gps]
+            means.append(np.column_stack(mb))
+        mean = baseline(df) + np.vstack(means)
+        return mean, (np.vstack(stds) if with_std else None)
+
+    def save(self, out_dir):
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        with open(out_dir / "gp.pkl", "wb") as f:
+            pickle.dump(self.gps, f)
+        (out_dir / "scalers.json").write_text(json.dumps(
+            {"inputs": INPUTS, "input_specs": _input_specs(), "outputs": OUTPUTS}, indent=2))
+
+    @classmethod
+    def load(cls, out_dir):
+        out_dir = Path(out_dir)
+        _check_schema(json.loads((out_dir / "scalers.json").read_text()))
+        with open(out_dir / "gp.pkl", "rb") as f:
+            return cls(pickle.load(f))
+
+
+def load_model(out_dir):
+    """Load whichever surrogate a directory holds: MLP ensemble (model.pt) or GP (gp.pkl)."""
+    out_dir = Path(out_dir)
+    if (out_dir / "gp.pkl").exists():
+        return GPBaseline.load(out_dir)
+    if (out_dir / "model.pt").exists():
+        return Surrogate.load(out_dir)
+    raise FileNotFoundError(f"no surrogate (model.pt or gp.pkl) in {out_dir}")
+
+
+def _check_schema(sc):
+    """Refuse a saved model whose inputs, outputs, ranges or scales differ from the current schema."""
+    if sc["inputs"] != INPUTS or sc["outputs"] != OUTPUTS:
+        raise ValueError("saved surrogate was trained with a different parameter/output list")
+    changed = [a[0] for a, b in zip(sc.get("input_specs", []), _input_specs()) if a != b]
+    if "input_specs" not in sc or changed:
+        raise ValueError(f"saved surrogate was trained with different input ranges/scales "
+                         f"({', '.join(changed) or 'not recorded'}); retrain it")
 
 
 def evaluate(model, df):
     """R^2 and RMSE per output on the successful rows of df."""
     df = ok_rows(df)
-    pred, _ = model.predict(df)
+    pred, _ = model.predict(df, with_std=False)
     true = df[OUTPUTS].to_numpy(dtype=float)
     out = {}
     for j, name in enumerate(OUTPUTS):

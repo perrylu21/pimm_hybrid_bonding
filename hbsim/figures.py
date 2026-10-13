@@ -14,6 +14,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
+from matplotlib.ticker import LogLocator, NullFormatter, ScalarFormatter  # noqa: E402
 
 from hbsim.params import SWEPT, defaults  # noqa: E402
 from hbsim.postprocess import OUTPUTS  # noqa: E402
@@ -34,6 +35,20 @@ plt.rcParams.update({
 })
 
 
+def log_axis(ax, axis):
+    """Plain-number major ticks at 1, 2, 5 x 10^n and no minor labels on a log axis.
+
+    Matplotlib labels minor ticks when a log axis spans under ~2 decades (e.g. t_die 30-775 um),
+    and those labels overlap.
+    """
+    a = ax.xaxis if axis == "x" else ax.yaxis
+    a.set_major_locator(LogLocator(base=10, subs=(1.0, 2.0, 5.0)))
+    fmt = ScalarFormatter()
+    fmt.set_scientific(False)
+    a.set_major_formatter(fmt)
+    a.set_minor_formatter(NullFormatter())
+
+
 def _label(name):
     unit = UNITS.get(name) or SWEPT[name].unit
     return f"{name} [{unit}]"
@@ -42,7 +57,7 @@ def _label(name):
 def parity(model, df_test, out_path, outputs=("m_x", "d_max", "t_x", "resid_3sigma")):
     """Predicted vs FEM scatter per output with the y = x line; R^2 in each title."""
     df = ok_rows(df_test)
-    pred, _ = model.predict(df)
+    pred, _ = model.predict(df, with_std=False)
     fig, axes = plt.subplots(1, len(outputs), figsize=(3.2 * len(outputs), 3.2))
     for ax, name in zip(np.atleast_1d(axes), outputs):
         j = OUTPUTS.index(name)
@@ -117,7 +132,7 @@ def process_window(model, x_param, y_param, out_path, output="d_max", spec=100.0
     X, Y = np.meshgrid(axis(sx), axis(sy))
     df = pd.DataFrame([{**{k: base[k] for k in INPUTS}, x_param: x, y_param: y}
                        for x, y in zip(X.ravel(), Y.ravel())])
-    Z = model.predict(df)[0][:, OUTPUTS.index(output)].reshape(X.shape)
+    Z = model.predict(df, with_std=False)[0][:, OUTPUTS.index(output)].reshape(X.shape)
     fig, ax = plt.subplots(figsize=(4.6, 3.8))
     cf = ax.contourf(X, Y, Z, levels=12, cmap=BLUES)
     if Z.min() < spec < Z.max():
@@ -130,8 +145,10 @@ def process_window(model, x_param, y_param, out_path, output="d_max", spec=100.0
         ax.set_title(f"{output} {side} spec {spec:g} {UNITS[output]}", fontsize=9)
     if sx.scale == "log":
         ax.set_xscale("log")
+        log_axis(ax, "x")
     if sy.scale == "log":
         ax.set_yscale("log")
+        log_axis(ax, "y")
     ax.set_xlabel(_label(x_param))
     ax.set_ylabel(_label(y_param))
     ax.grid(False)
@@ -154,6 +171,7 @@ def line_check(model, df_line, param, out_path, output="d_max"):
                label="FEM")
     if SWEPT[param].scale == "log":
         ax.set_xscale("log")
+        log_axis(ax, "x")
     ax.set_xlabel(_label(param))
     ax.set_ylabel(_label(output))
     ax.legend()

@@ -138,8 +138,10 @@ The surrogate is good enough when both hold:
 - RMSE at 1,024 is less than 10% lower than at 512 (the curve has flattened, so more runs would not
   help much).
 
-The Gaussian-process comparison scores are in `results/main_sweep_fast/surrogate/metrics.json`
-under `"gp"`.
+`--gp` also fits a Gaussian-process (GP) model on the same data (~4 min for 1,024 runs) and saves it
+to `results/main_sweep_fast/surrogate_gp/`. Its holdout scores are in
+`results/main_sweep_fast/surrogate/metrics.json` under `"gp"`. Steps 7 and 8 work with either
+model; running both and comparing is a robustness check worth reporting.
 
 **Step 6. Only if step 5 fails: extend to 2,048 runs (~2–2.5 h more).** In
 `studies/main_sweep_fast.yaml`, change `n: 1024` to `n: 2048`, then rerun steps 3 and 5. The first
@@ -155,6 +157,12 @@ It prints the five most influential parameters for `m_x` and `d_max` (`S1` = eff
 total effect, `interaction` = `ST − S1`). The full tables are written to
 `results/main_sweep_fast/surrogate/sobol_first_total.csv` and `sobol_second_order.csv`.
 
+Same analysis with the GP model (~1.5 min); tables are written to `surrogate_gp/`:
+
+```bash
+.venv/bin/python cli.py sensitivity --surrogate results/main_sweep_fast/surrogate_gp
+```
+
 **Step 8. Figures.**
 
 ```bash
@@ -163,7 +171,8 @@ total effect, `interaction` = `ST − S1`). The full tables are written to
 
 PDFs are written to `results/main_sweep_fast/figures/`: parity plots, Sobol bars, pairwise
 interaction heatmaps, learning curve, and two process-window maps (`dT_head` × `kappa`,
-`kappa` × `k_head`).
+`kappa` × `k_head`). For the GP model, pass `--surrogate results/main_sweep_fast/surrogate_gp`;
+its figures go to `results/main_sweep_fast/figures_gp/` (the learning curve is MLP-only).
 
 **Step 9. (Optional, ~30 min) FEM trend checks.** One-at-a-time FEM sweeps of five parameters,
 drawn against the surrogate's prediction:
