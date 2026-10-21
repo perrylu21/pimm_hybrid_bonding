@@ -78,6 +78,16 @@ def compute(bench):
     n["EtwoOursFourSmallPrior"] = (e2v(64, 4, 2.0, "physics_map"), "{:.1f}", "E2: same with 64-run prior [nm]")
     n["EtwoAffineFour"] = (e2v(256, 4, 2.0, "affine"), "{:.1f}", "E2: 4 marks, 2 nm noise, affine overlay model [nm]")
     n["EtwoPriorOnly"] = (e2v(256, 4, 2.0, "physics_prior_only"), "{:.1f}", "E2: 256-run prior, no marks [nm]")
+    for prior, ptag in ((256, ""), (64, "SmallPrior")):
+        for k, ktag in ((4, "Four"), (9, "Nine"), (16, "Sixteen")):
+            if (k, ptag) not in ((4, ""), (4, "SmallPrior")):  # defined above
+                n[f"EtwoOurs{ktag}{ptag}"] = (e2v(prior, k, 2.0, "physics_map"), "{:.1f}",
+                                               f"E2: {k} marks, 2 nm noise, {prior}-run prior, ours [nm]")
+            n[f"EtwoPriorAffine{ktag}{ptag}"] = (e2v(prior, k, 2.0, "prior_affine"), "{:.1f}",
+                                                  f"E2: {k} marks, 2 nm noise, {prior}-run prior + affine fit [nm]")
+    n["EtwoPolyTwoNine"] = (e2v(256, 9, 2.0, "poly2"), "{:.1f}", "E2: 9 marks, 2 nm noise, 2nd-order correction [nm]")
+    n["EtwoPolyThreeSixteen"] = (e2v(256, 16, 2.0, "poly3"), "{:.1f}", "E2: 16 marks, 2 nm noise, 3rd-order correction [nm]")
+    n["EtwoAffineSixteen"] = (e2v(256, 16, 2.0, "affine"), "{:.1f}", "E2: 16 marks, 2 nm noise, affine [nm]")
 
     e3 = pd.read_csv(bench / "e3_robustness.csv")
     for case, tag in (("ood_dT_head_gt40", "OodDT"), ("ood_L_die_gt14", "OodL"), ("train_noise_5nm", "NoiseFive")):

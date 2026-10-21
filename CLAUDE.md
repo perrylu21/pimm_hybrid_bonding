@@ -11,7 +11,8 @@
 - Title: "Physics-Structured Learning of Bonding-Induced Overlay Distortion in Data-Scarce Die-to-Wafer Hybrid Bonding". Avoid "physics-informed" for our method (reserve it for the PINN) and avoid "die shift" as the predicted quantity (the model's die-centre anchor keeps translation/rotation near zero; state that assumption in the Method).
 - Attribution of gains: the data efficiency for d_max (64 vs 512 runs) comes from the analytic prior plus the low-dimensional basis; the bending basis is what improves the non-uniform component (resid_3sigma) and the field error. Membrane-only matches the full basis on d_max. m_x ties with analytic+GP (identical numbers) — disclose.
 - R0: physics basis vs generic polynomial is a modest advantage (99.1% vs 96.2% at 23 vs 24 dims; median residual 0.58 vs 1.18 nm). Phrase as "about half the residual at equal dimension, with physical meaning", not as a large gap.
-- E2: add stronger sparse-mark baselines (higher-order correction; prior + affine on the remainder) before writing E2 results.
+- E2: stronger baselines added (poly2, poly3, prior_affine; rerun 2026-10-21). Outcome: with 3-5 marks, "physics prior + affine fit" ties our MAP (4 marks: 2.5 vs 2.5 nm, 256-run prior), so the few-mark gain comes from the prior; our MAP wins at 9-16 marks (16 marks, 64-run prior: 1.7 vs 4.8 nm; vs 3rd-order 2.3 nm). At 5 nm noise / 9 marks prior_affine is slightly better than ours. Report exactly this.
+- All benchmark CSVs must be regenerated from committed code before submission (the old E2 CSV came from an earlier code version; R0/E1/E3/PINN may be stale too).
 - Validation claim: "validated against a higher-fidelity model of the same physics" — do not claim the comparison is free of inverse crime; list shared assumptions in Limitations.
 - PINN: short negative-result subsection in Results.
 - Sobol sensitivity (results/main_sweep_fast/surrogate*/sobol_*.csv): short Results subsection; MLP and GP rankings agree within 0.03.

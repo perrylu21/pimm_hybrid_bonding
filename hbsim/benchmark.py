@@ -199,11 +199,15 @@ def run_e2(train, test, out_csv, n_prior=(64, 256), ks=(3, 4, 5, 9, 16), noises=
                 for noise in noises:
                     if (str(npr), str(k), str(noise), str(rep)) in done:
                         continue
-                    acc = {m: [] for m in ("affine", "physics_prior_only", "physics_map")}
+                    acc = {m: [] for m in ("affine", "poly2", "poly3", "prior_affine",
+                                           "physics_prior_only", "physics_map")}
                     for t in range(len(test)):
                         hl = test.half_L[t]
                         meas = test.F[t, rows] + noise * rng.standard_normal(len(rows))
                         preds = {"affine": pb.reconstruct_affine(P, marks, meas) if 2 * k >= 6 else None,
+                                 "poly2": pb.reconstruct_polynomial(P, marks, meas, 2) if k >= 6 else None,
+                                 "poly3": pb.reconstruct_polynomial(P, marks, meas, 3) if k >= 10 else None,
+                                 "prior_affine": pb.reconstruct_prior_affine(P, marks, meas, prior[t] * hl),
                                  "physics_prior_only": prior[t] * hl,
                                  "physics_map": pb.reconstruct_physics(P, marks, meas, hl, prior[t], S, M, noise)}
                         for m, f in preds.items():

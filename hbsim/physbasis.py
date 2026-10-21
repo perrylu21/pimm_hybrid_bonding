@@ -257,6 +257,35 @@ def reconstruct_affine(P, marks, meas_nm):
     return A @ c
 
 
+def polynomial_modes(P, order):
+    """Higher-order overlay correction: monomials x^i y^j (i + j <= order) for each axis separately.
+
+    Shape (2N, (order+1)(order+2)); order 1 is the 6-parameter affine model in another basis.
+    """
+    x, y = P[:, 0], P[:, 1]
+    z = np.zeros_like(x)
+    mono = [x ** i * y ** (k - i) for k in range(order + 1) for i in range(k + 1)]
+    return np.column_stack([np.r_[m, z] for m in mono] + [np.r_[z, m] for m in mono])
+
+
+def reconstruct_polynomial(P, marks, meas_nm, order):
+    """Empirical baseline: fit an order-`order` polynomial correction per axis to the marks."""
+    terms = (order + 1) * (order + 2) // 2
+    if len(marks) < terms:
+        raise ValueError(f"order-{order} correction needs >= {terms} marks per axis, got {len(marks)} marks")
+    A = polynomial_modes(P, order)
+    c, *_ = np.linalg.lstsq(A[_rows(marks, len(P))], meas_nm, rcond=None)
+    return A @ c
+
+
+def reconstruct_prior_affine(P, marks, meas_nm, prior_nm):
+    """Baseline with the same prior as the physics method: prior field + affine fit to the remainder."""
+    rows = _rows(marks, len(P))
+    A = affine_modes(P)
+    c, *_ = np.linalg.lstsq(A[rows], meas_nm - prior_nm[rows], rcond=None)
+    return prior_nm + A @ c
+
+
 def reconstruct_physics(P, marks, meas_nm, half_L, prior_mean_norm, prior_cov, modes, noise_nm):
     """Bayesian (MAP) reconstruction inside the physics span.
 

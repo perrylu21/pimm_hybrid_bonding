@@ -98,3 +98,38 @@ def test_pinn_trains_and_predicts_shapes():
 def test_mark_layouts_are_unique_and_inside(k):
     idx = pb.mark_layout(k, 21)
     assert len(set(idx)) == k and idx.min() >= 0 and idx.max() < 441
+
+
+P21 = ref_pads(21)
+
+
+@pytest.mark.parametrize("order, k", [(2, 9), (3, 16)])
+def test_polynomial_reconstruction_recovers_its_own_fields(order, k):
+    modes = pb.polynomial_modes(P21, order)
+    assert modes.shape[1] == (order + 1) * (order + 2)  # per axis (order+1)(order+2)/2 terms
+    field = modes @ np.random.default_rng(0).normal(size=modes.shape[1])
+    marks = pb.mark_layout(k, 21)
+    got = pb.reconstruct_polynomial(P21, marks, field[np.r_[marks, marks + len(P21)]], order)
+    assert np.allclose(got, field, atol=1e-8)
+
+
+def test_polynomial_reconstruction_refuses_too_few_marks():
+    marks = pb.mark_layout(5, 21)
+    with pytest.raises(ValueError, match="marks"):
+        pb.reconstruct_polynomial(P21, marks, np.zeros(10), 2)
+
+
+def test_prior_plus_affine_recovers_prior_plus_affine_field():
+    rng = np.random.default_rng(1)
+    prior = pb.gradient_fields(P21, 3) @ rng.normal(size=pb.gradient_fields(P21, 3).shape[1])
+    field = prior + pb.affine_modes(P21) @ rng.normal(size=6)
+    marks = pb.mark_layout(4, 21)
+    got = pb.reconstruct_prior_affine(P21, marks, field[np.r_[marks, marks + len(P21)]], prior)
+    assert np.allclose(got, field, atol=1e-8)
+
+
+def test_prior_plus_affine_returns_prior_when_marks_agree_with_it():
+    prior = pb.gradient_fields(P21, 2)[:, 0] * 5.0
+    marks = pb.mark_layout(3, 21)
+    got = pb.reconstruct_prior_affine(P21, marks, prior[np.r_[marks, marks + len(P21)]], prior)
+    assert np.allclose(got, prior, atol=1e-8)

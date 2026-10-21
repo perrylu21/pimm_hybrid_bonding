@@ -13,7 +13,7 @@ import pandas as pd  # noqa: E402
 
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 STYLE = {  # model -> (label, color, linestyle, marker)
-    "physbasis": ("Physics-informed basis + GP (ours)", "#2a78d6", "-", "o"),
+    "physbasis": ("Physics-structured basis + GP (ours)", "#2a78d6", "-", "o"),
     "pinn": ("Parametric PINN (ours)", "#eb6834", "-", "s"),
     "gp_hybrid": ("Analytic + GP residual", "#1baf7a", "--", "^"),
     "mlp_hybrid": ("Analytic + MLP ensemble", "#6250d6", "--", "v"),
@@ -122,8 +122,11 @@ def representation(r0, out):
 
 def sparse_marks(e2, out):
     meth = {"affine": ("Industry 6-parameter overlay model", "#8a8984", "--", "D"),
+            "poly2": ("2nd-order correction (12 terms)", "#6250d6", "--", "v"),
+            "poly3": ("3rd-order correction (20 terms)", "#e87ba4", "--", "^"),
+            "prior_affine": ("Physics prior + affine fit", "#1baf7a", "--", "s"),
             "physics_prior_only": ("Physics prior only (no marks)", INK2, ":", None),
-            "physics_map": ("Physics-informed MAP (ours)", "#2a78d6", "-", "o")}
+            "physics_map": ("Physics-structured MAP (ours)", "#2a78d6", "-", "o")}
     noises = sorted(e2.noise_nm.unique())
     priors = sorted(e2.n_prior.unique())
     fig, axs = plt.subplots(len(priors), len(noises), figsize=(3.3 * len(noises), 2.8 * len(priors)), squeeze=False,
@@ -140,8 +143,8 @@ def sparse_marks(e2, out):
             ax.set_xticks(sorted(e2.k.unique()))
         axs[i, 0].set_ylabel("median field RMSE [nm]")
     h, l = axs[0, 0].get_legend_handles_labels()
-    fig.legend(h, l, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.04), fontsize=8)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.07, 1, 1))  # leave room for the legend below the bottom row's labels
+    fig.legend(h, l, loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.0), fontsize=8)
     fig.savefig(out / "fig_e2_sparse_marks.pdf")
     fig.savefig(out / "fig_e2_sparse_marks.png", dpi=160)
     plt.close(fig)
