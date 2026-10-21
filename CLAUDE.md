@@ -17,4 +17,4 @@
 - PINN: short negative-result subsection in Results.
 - Sobol sensitivity (results/main_sweep_fast/surrogate*/sobol_*.csv): short Results subsection; MLP and GP rankings agree within 0.03.
 - Magnitude vs Bex 2024: "same order of magnitude" only.
-- refs.bib: the user verifies every entry (DOI/arXiv) before it is cited.
+- refs.bib: the user verifies every entry (DOI/arXiv) before it is cited. As of 2026-10-21 all 10 entries are user-verified and checked against arXiv/Crossref.

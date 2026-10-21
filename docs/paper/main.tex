@@ -39,8 +39,8 @@ accuracy---we analyze why. Code, data and the pinned FEM container are released.
   \item D2W hybrid bonding overlay budget ($<\SI{250}{\nano\meter}$ at \SI{2}{\micro\meter} pitch \cite{bex2024}); die shift from
         bond-head heating, die bow and head compliance; translation/rotation corrected by the bonder, the rest is not.
   \item Data scarcity on two levels: (i) simulation cost in a 16-D process space; (ii) sparse overlay marks in production.
-  \item Existing practice: 4--6 parameter linear overlay models \cite{bex2024,chen2024yap}; data-driven ML on overlay \cite{james2024};
-        PINNs in packaging so far target warpage \cite{warpagepinn2026,warpgnn2026}.
+  \item Existing practice: 4--6 parameter linear overlay models \cite{bex2024}; data-driven ML on overlay \cite{james2024};
+        PINNs in packaging have targeted joint strength \cite{mei2026sinteredag} and warpage \cite{warpagepinn2026}.
   \item Contributions: (1) reduced physics of the bonded die surface and its validation against 3D transient FEM (R0);
         (2) two physics-informed realizations (hard basis + GP; parametric PINN); (3) data-efficiency benchmark against
         fair hybrid baselines (E1, E4); (4) sparse-mark reconstruction that beats the industry overlay model (E2);
@@ -48,8 +48,10 @@ accuracy---we analyze why. Code, data and the pinned FEM container are released.
 \end{itemize}
 
 \section{Related work}
-\todo{D2W overlay error budgets \cite{bex2024,kennes2025}; yield models with overlay \cite{chen2024yap}; W2W bonding mechanics
-\cite{ghosh2026w2w}; ML for bonding overlay \cite{james2024}; PINNs \cite{raissi2019pinn} and packaging PINNs \cite{warpagepinn2026,warpgnn2026}.}
+\todo{D2W overlay error budgets \cite{bex2024}; hybrid-bonding yield models \cite{chen2025yapplus}; die shift in fan-out
+packaging \cite{sung2026dieshift}; physics/data hybrid models and digital twins for 3D IC packaging \cite{datta2026digitaltwin};
+W2W bonding mechanics \cite{ghosh2026w2w}; ML for bonding overlay \cite{james2024}; PINNs \cite{raissi2019pinn} and PINN
+applications in packaging and contact mechanics \cite{warpagepinn2026,mei2026sinteredag,xia2024pinncontact}.}
 
 \section{High-fidelity reference model}
 3D transient thermo-mechanical FEM of the bonding moment (DOLFINx): heat conduction in die, bond layers and wafer;
