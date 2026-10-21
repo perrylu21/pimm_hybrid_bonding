@@ -1,0 +1,131 @@
+% arXiv preprint skeleton -- figures and tables are produced by `python cli.py paper-figs`
+% (copy results/benchmark/figures/* next to this file, or adjust \graphicspath).
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,siunitx,xcolor}
+\graphicspath{{../../results/benchmark/figures/}}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\title{Physics-Informed Learning for Die-Shift Prediction in Data-Scarce\\ Die-to-Wafer Hybrid Bonding}
+\author{Perry Lu}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Die-to-wafer (D2W) hybrid bonding at sub-\SI{2}{\micro\meter} pitch leaves an overlay budget of a few hundred
+nanometers, yet the data needed to predict die shift are scarce on both ends: each high-fidelity
+thermo-mechanical simulation is expensive in a 16-dimensional process space, and production metrology
+measures only a handful of overlay marks per die. We propose a physics-informed learning framework that
+encodes the kinematics of the bonded die surface---the response of a free plane-stress membrane to an
+isotropic eigenstrain plus a curl-free bending field (Kirchhoff--Love)---together with a closed-form
+magnification prior. Against a 3D transient finite-element model with bond-wave locking, this reduced physics
+represents 99.1\% of the non-affine overlay energy with 23 degrees of freedom, versus 96.2\% for a generic
+polynomial with 24, and it shows that the non-uniform die shift is bending-dominated (membrane alone: 45.6\%).
+A hard-constrained realization (physics basis with Gaussian-process coefficients) reaches a holdout
+$R^2\geq0.95$ for the maximum pad misalignment with 64 FEM runs, where the best hybrid baseline (analytic model
+plus GP residual) needs 512, and it keeps $R^2=0.96$ when extrapolating to hotter bond heads, against 0.82--0.83
+for the baselines. For sparse metrology, a Bayesian reconstruction in the physics span recovers the full
+441-pad overlay of a die from four marks with a median error of 2.5~nm (prior from 256 runs) or 5.0~nm
+(64 runs), versus 8.1~nm for the industry six-parameter overlay model. A soft-constrained parametric PINN with
+the same physics is competitive only at the smallest data size, and its physics residual adds no measurable
+accuracy---we analyze why. Code, data and the pinned FEM container are released.
+\end{abstract}
+
+\section{Introduction}
+\begin{itemize}
+  \item D2W hybrid bonding overlay budget ($<\SI{250}{\nano\meter}$ at \SI{2}{\micro\meter} pitch \cite{bex2024}); die shift from
+        bond-head heating, die bow and head compliance; translation/rotation corrected by the bonder, the rest is not.
+  \item Data scarcity on two levels: (i) simulation cost in a 16-D process space; (ii) sparse overlay marks in production.
+  \item Existing practice: 4--6 parameter linear overlay models \cite{bex2024,chen2024yap}; data-driven ML on overlay \cite{james2024};
+        PINNs in packaging so far target warpage \cite{warpagepinn2026,warpgnn2026}.
+  \item Contributions: (1) reduced physics of the bonded die surface and its validation against 3D transient FEM (R0);
+        (2) two physics-informed realizations (hard basis + GP; parametric PINN); (3) data-efficiency benchmark against
+        fair hybrid baselines (E1, E4); (4) sparse-mark reconstruction that beats the industry overlay model (E2);
+        (5) robustness to noise and extrapolation (E3); (6) open, reproducible pipeline.
+\end{itemize}
+
+\section{Related work}
+\todo{D2W overlay error budgets \cite{bex2024,kennes2025}; yield models with overlay \cite{chen2024yap}; W2W bonding mechanics
+\cite{ghosh2026w2w}; ML for bonding overlay \cite{james2024}; PINNs \cite{raissi2019pinn} and packaging PINNs \cite{warpagepinn2026,warpgnn2026}.}
+
+\section{High-fidelity reference model}
+3D transient thermo-mechanical FEM of the bonding moment (DOLFINx): heat conduction in die, bond layers and wafer;
+quasi-static thermo-elasticity of each body; pads lock when the bond wave reaches them; pre-contact rigid motion removed
+(bonder alignment). 16 swept parameters (Table~\ref{tab:params}), 1{,}024 Sobol training runs, 128 Latin-hypercube
+holdout runs, $21\times21$ pads per die. The coarse mesh used here ($n=12$) is within 0.2\% of the finest mesh. \todo{Table of parameters from README.}
+
+\section{Method}
+\subsection{Reduced physics of the bonding surface}
+On the reference square $\xi=x/(L/2)\in[-1,1]^2$ the in-plane displacement of the die's bonding surface is
+\begin{equation}
+  \mathbf{u} = \mathbf{u}_m + \nabla\phi, \qquad \phi = -\tfrac{t}{2}\,w,
+\end{equation}
+a membrane part $\mathbf{u}_m$ and a curl-free bending part (Kirchhoff--Love). The membrane part satisfies plane-stress
+equilibrium with an isotropic eigenstrain $e(\xi)$ and free edges:
+\begin{equation}
+  \nabla\cdot\boldsymbol\sigma = 0,\quad
+  \boldsymbol\sigma = (1-\nu)\,\boldsymbol\varepsilon(\mathbf{u}_m) + \nu\,\mathrm{tr}\,\boldsymbol\varepsilon(\mathbf{u}_m)\,\mathbf{I} - (1+\nu)\,e\,\mathbf{I},\quad
+  \boldsymbol\sigma\mathbf{n}=\mathbf{0}\ \text{on}\ \partial\Omega .
+\end{equation}
+A uniform eigenstrain gives pure magnification $\mathbf{u}=e\,\boldsymbol\xi$; its prior is the closed-form mismatch
+$m_a = \alpha_{Si}(T_{head}-T_{ref}) - \alpha_c(T_{chuck}-T_{ref}) + \kappa(t_{die}+t_{bond})/2$.
+
+\subsection{Hard-constrained realization (physics basis + GP)}
+Membrane responses to eigenstrain monomials (computed once, scikit-fem) and gradients of polynomial potentials span the
+field; columns are orthonormalized against magnification and rigid modes. Coefficients of the non-uniform part are
+compressed by PCA; one GP (Mat\'ern-5/2, ARD) per score maps the 16 parameters to the field.
+
+\subsection{Soft-constrained realization (parametric PINN)}
+Networks $N_u, N_e, N_\phi(\xi,\mathbf{p})$; $\mathbf{u}_m = m_a\boldsymbol\xi + S N_u$, $e = m_a + S N_e$,
+$\phi = S N_\phi$. Loss: data at pads of the training runs, equilibrium residual and free-edge traction at collocation
+points drawn at \emph{unlabeled} parameter values, gauge (zero mean translation/rotation).
+
+\subsection{Sparse-mark reconstruction}
+Given the process parameters and $k$ measured marks, the MAP estimate of the field in the physics span uses the
+parametric model as prior mean and its cross-validated error variance as prior covariance; rigid modes get a broad prior.
+
+\section{Experiments}
+\textbf{R0} representation test; \textbf{E1} learning curves ($N=16\ldots1024$, 5 random subsets);
+\textbf{E2} sparse marks ($k=3,4,5,9,16$; noise 1, 2, \SI{5}{\nano\meter}); \textbf{E3} robustness
+(training noise, extrapolation in $\Delta T_{head}$ and $L_{die}$); \textbf{E4} ablations (no prior, membrane only,
+no physics loss). Baselines: analytic only, GP on data only, analytic + GP residual, analytic + MLP ensemble.
+
+\section{Results}
+\begin{figure}[t]\centering\includegraphics[width=0.7\linewidth]{fig_r0_representation.pdf}
+\caption{Share of the non-affine FEM overlay that each basis represents (degree 4).}\label{fig:r0}\end{figure}
+\begin{figure*}[t]\centering\includegraphics[width=\linewidth]{fig_e1_learning_curves.pdf}
+\caption{Holdout error vs number of FEM training runs (median and min--max over random subsets).}\label{fig:e1}\end{figure*}
+\begin{figure*}[t]\centering\includegraphics[width=\linewidth]{fig_e2_sparse_marks.pdf}
+\caption{Full-die reconstruction from $k$ overlay marks.}\label{fig:e2}\end{figure*}
+\begin{figure}[t]\centering\includegraphics[width=\linewidth]{fig_e3_robustness.pdf}
+\caption{Robustness to noisy training data and extrapolation.}\label{fig:e3}\end{figure}
+\begin{figure}[t]\centering\includegraphics[width=\linewidth]{fig_e4_ablations.pdf}
+\caption{Ablations.}\label{fig:e4}\end{figure}
+\begin{figure*}[t]\centering\includegraphics[width=\linewidth]{fig_field_example.pdf}
+\caption{Non-affine overlay of the holdout die with the largest non-uniform shift.}\label{fig:field}\end{figure*}
+\input{../../results/benchmark/figures/table_e1_summary.tex}
+
+\section{Discussion and limitations}
+\begin{itemize}
+  \item No experimental overlay data: validation is against an independent, higher-fidelity model (3D transient FEM with
+        bond-wave locking) whose physics is richer than the reduced model, so the test is not an inverse crime; the
+        reduced-physics gap is quantified (R0).
+  \item Plausibility: magnitudes consistent with published D2W measurements (die-corner scaling 80--150~nm \cite{bex2024}).
+  \item What a fab would measure to validate: \todo{protocol --- marks per die, dies per wafer, recipe split}.
+  \item Hard constraint vs PINN: with the eigenstrain left free (closure field), the membrane residual only
+        restricts the \emph{shape} of the field, which the curl-free bending part can absorb anyway; the
+        information that transfers to unseen process points is the analytic prior and the low-dimensional span,
+        which the hard-constrained model encodes exactly and a GP exploits efficiently in 16 dimensions.
+        PINN ablation at $N=64$: field RMSE 92~nm with the physics loss, 88~nm without (Fig.~\ref{fig:e4}).
+        A PINN becomes worthwhile when the loads are known in closed form (e.g. a solved thermal field), not as
+        a closure model.
+\end{itemize}
+
+\section*{Code and data availability}
+Repository, study YAML files, pinned DOLFINx image digest, and every benchmark CSV. \todo{URL}
+
+\bibliographystyle{unsrt}
+\bibliography{refs}
+\end{document}

@@ -6,6 +6,8 @@
   python cli.py train --train results/main_sweep --test results/holdout
   python cli.py sensitivity --surrogate results/main_sweep/surrogate      (or .../surrogate_gp)
   python cli.py figures --surrogate results/main_sweep/surrogate --test results/holdout
+  python cli.py benchmark e1 --train results/main_sweep_fast --test results/holdout_fast
+  python cli.py paper-figs --bench results/benchmark
 """
 import argparse
 import json
@@ -83,6 +85,30 @@ def cmd_figures(a):
     print(f"figures written to {out}")
 
 
+def cmd_benchmark(a):
+    import torch
+    from hbsim import benchmark as bm
+    from hbsim.fielddata import load_fields
+    torch.set_num_threads(a.threads)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    train, test = load_fields(a.train), load_fields(a.test)
+    if a.exp == "r0":
+        print(bm.run_r0(train, out / "r0_representation.csv").round(4).to_string(index=False))
+    elif a.exp == "e1":
+        bm.run_e1(train, test, out / "e1_learning_curve.csv", a.models, a.sizes, a.reps, pinn_steps=a.pinn_steps)
+    elif a.exp == "e2":
+        bm.run_e2(train, test, out / "e2_sparse_marks.csv", n_prior=a.sizes, reps=a.reps)
+    elif a.exp == "e3":
+        bm.run_e3(train, test, out / "e3_robustness.csv", a.models, n=a.sizes[0], reps=a.reps,
+                  pinn_steps=a.pinn_steps)
+
+
+def cmd_paper_figs(a):
+    from hbsim import paperfigs
+    paperfigs.make_all(Path(a.bench), Path(a.out or Path(a.bench) / "figures"), a.train, a.test)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(required=True)
@@ -113,6 +139,25 @@ def main():
     p.add_argument("--spec", type=float, default=100.0, help="d_max spec line [nm]")
     p.add_argument("--out")
     p.set_defaults(fn=cmd_figures)
+    p = sub.add_parser("benchmark", help="data-scarce benchmarks: r0, e1 (learning curve), e2 (sparse marks), e3")
+    p.add_argument("exp", choices=["r0", "e1", "e2", "e3"])
+    p.add_argument("--train", required=True)
+    p.add_argument("--test", required=True)
+    p.add_argument("--out", default="results/benchmark")
+    p.add_argument("--models", nargs="+", default=["analytic", "gp_data_only", "gp_hybrid", "mlp_hybrid",
+                                                    "physbasis", "pinn"])
+    p.add_argument("--sizes", nargs="+", type=int, default=[16, 32, 64, 128, 256],
+                   help="training-set sizes (e1), prior sizes (e2), or the single size (e3)")
+    p.add_argument("--reps", type=int, default=3)
+    p.add_argument("--pinn-steps", type=int, default=6000)
+    p.add_argument("--threads", type=int, default=4)
+    p.set_defaults(fn=cmd_benchmark)
+    p = sub.add_parser("paper-figs", help="figures and tables from benchmark CSVs")
+    p.add_argument("--bench", default="results/benchmark")
+    p.add_argument("--train", default="results/main_sweep_fast")
+    p.add_argument("--test", default="results/holdout_fast")
+    p.add_argument("--out")
+    p.set_defaults(fn=cmd_paper_figs)
     a = ap.parse_args()
     a.fn(a)
 

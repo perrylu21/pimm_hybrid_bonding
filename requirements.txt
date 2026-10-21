@@ -11,3 +11,4 @@ SALib==1.6.0
 torch==2.14.1
 matplotlib==3.11.2
 pytest==9.1.1
+scikit-fem==12.0.2

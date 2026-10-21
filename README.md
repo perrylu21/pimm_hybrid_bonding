@@ -296,3 +296,40 @@ Defined in code at `hbsim/params.py` (`SWEPT`, `NUMERICS`), `hbsim/materials.py`
 The bonder's alignment removes translation and rotation present before contact; everything
 measured after that comes from bonding. Bonder placement offset and rotation error are not
 simulated; add them afterwards with `hbsim.postprocess.apply_placement`.
+
+## Physics-informed models and data-scarce benchmarks (paper)
+
+New modules (host only, no Docker needed; they reuse the finished FEM runs):
+
+| Path | Contents |
+|------|----------|
+| `hbsim/fielddata.py` | Loads pad-level overlay fields (`overlay.npz`) on the reference square |
+| `hbsim/physbasis.py` | Hard-constrained physics-informed model: Kirchhoff–Love kinematics (membrane eigenstrain response + curl-free bending field), analytic magnification prior, GP on PCA scores; sparse-mark MAP reconstruction |
+| `hbsim/pinn.py` | Parametric PINN: same physics as a soft constraint (plane-stress residual, free edges) + curl-free bending potential, trained with collocation at unlabeled parameter points |
+| `hbsim/benchmark.py` | R0 representation test, E1 learning curves (+E4 ablations), E2 sparse overlay marks, E3 robustness |
+| `hbsim/paperfigs.py` | Paper figures (PDF + PNG) and summary tables (CSV + LaTeX) |
+| `tests/test_physbasis.py` | Basis properties, analytic limits, PINN residual of the exact solution |
+
+Install the one new dependency: `uv pip install --python .venv/bin/python scikit-fem==12.0.2`
+
+```bash
+B=results/benchmark
+.venv/bin/python cli.py benchmark r0 --train results/main_sweep_fast --test results/holdout_fast --out $B
+# E1: fast models (minutes)
+.venv/bin/python cli.py benchmark e1 --train results/main_sweep_fast --test results/holdout_fast --out $B \
+    --models analytic gp_data_only gp_hybrid mlp_hybrid physbasis physbasis_noprior physbasis_membrane_only \
+    --sizes 16 32 64 128 256 512 1024 --reps 5
+# E1: PINN and its ablations (about 5-15 min per run; resumable)
+.venv/bin/python cli.py benchmark e1 --train results/main_sweep_fast --test results/holdout_fast --out $B/pinn \
+    --models pinn pinn_nophys pinn_nobending pinn_noprior --sizes 16 32 64 128 256 --reps 3
+# E2: reconstruct the full die from k overlay marks (prior trained on 64 and 256 FEM runs)
+.venv/bin/python cli.py benchmark e2 --train results/main_sweep_fast --test results/holdout_fast --out $B --sizes 64 256
+# E3: noisy training data, extrapolation in dT_head and L_die (training size 128)
+.venv/bin/python cli.py benchmark e3 --train results/main_sweep_fast --test results/holdout_fast --out $B \
+    --models analytic gp_data_only gp_hybrid mlp_hybrid physbasis pinn --sizes 128 --reps 3
+.venv/bin/python cli.py paper-figs --bench $B
+```
+
+Every benchmark appends one CSV row per finished case and skips finished rows, so you can stop
+with Ctrl-C and rerun the same command. `paper-figs` reads every matching CSV under `--bench`
+(including `$B/pinn/`).
