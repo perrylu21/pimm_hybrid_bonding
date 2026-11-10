@@ -10,7 +10,7 @@
 \newcommand{\NdmaxBaseline}{512}  % E1: same, best learned baseline
 \newcommand{\EoneOursThirtyTwo}{0.925}  % E1: R2(d_max) at N=32, ours
 \newcommand{\EoneBaseThirtyTwo}{0.791}  % E1: R2(d_max) at N=32, best learned baseline
-\newcommand{\EoneMembraneDmaxSixtyFour}{0.958}  % E1: R2(d_max) at N=64, membrane-only basis
+\newcommand{\EoneMembraneDmaxSixtyFour}{0.959}  % E1: R2(d_max) at N=64, membrane-only basis
 \newcommand{\EoneOursDmaxSixtyFour}{0.956}  % E1: R2(d_max) at N=64, ours
 \newcommand{\EoneNoPriorDmaxSixtyFour}{0.887}  % E1: R2(d_max) at N=64, ours without analytic prior
 \newcommand{\EoneOursResidOneTwoEight}{0.838}  % E1: R2(resid_3sigma) at N=128, ours
@@ -18,25 +18,25 @@
 \newcommand{\EoneOursFieldFiveTwelve}{15.5}  % E1: field RMSE at N=512, ours [nm]
 \newcommand{\EoneMembraneFieldFiveTwelve}{18.5}  % E1: field RMSE at N=512, membrane-only [nm]
 \newcommand{\EtwoOursFour}{2.5}  % E2: 4 marks, 2 nm noise, 256-run prior: median RMSE [nm]
-\newcommand{\EtwoOursFourSmallPrior}{5.1}  % E2: same with 64-run prior [nm]
+\newcommand{\EtwoOursFourSmallPrior}{4.4}  % E2: same with 64-run prior [nm]
 \newcommand{\EtwoAffineFour}{8.1}  % E2: 4 marks, 2 nm noise, affine overlay model [nm]
-\newcommand{\EtwoPriorOnly}{6.3}  % E2: 256-run prior, no marks [nm]
-\newcommand{\EtwoPriorAffineFour}{2.5}  % E2: 4 marks, 2 nm noise, 256-run prior + affine fit [nm]
-\newcommand{\EtwoOursNine}{2.3}  % E2: 9 marks, 2 nm noise, 256-run prior, ours [nm]
+\newcommand{\EtwoPriorOnly}{8.1}  % E2: 256-run prior, no marks [nm]
+\newcommand{\EtwoPriorAffineFour}{2.6}  % E2: 4 marks, 2 nm noise, 256-run prior + affine fit [nm]
+\newcommand{\EtwoOursNine}{2.5}  % E2: 9 marks, 2 nm noise, 256-run prior, ours [nm]
 \newcommand{\EtwoPriorAffineNine}{2.4}  % E2: 9 marks, 2 nm noise, 256-run prior + affine fit [nm]
-\newcommand{\EtwoOursSixteen}{1.5}  % E2: 16 marks, 2 nm noise, 256-run prior, ours [nm]
+\newcommand{\EtwoOursSixteen}{1.4}  % E2: 16 marks, 2 nm noise, 256-run prior, ours [nm]
 \newcommand{\EtwoPriorAffineSixteen}{2.2}  % E2: 16 marks, 2 nm noise, 256-run prior + affine fit [nm]
-\newcommand{\EtwoPriorAffineFourSmallPrior}{5.1}  % E2: 4 marks, 2 nm noise, 64-run prior + affine fit [nm]
-\newcommand{\EtwoOursNineSmallPrior}{3.9}  % E2: 9 marks, 2 nm noise, 64-run prior, ours [nm]
-\newcommand{\EtwoPriorAffineNineSmallPrior}{5.4}  % E2: 9 marks, 2 nm noise, 64-run prior + affine fit [nm]
+\newcommand{\EtwoPriorAffineFourSmallPrior}{4.4}  % E2: 4 marks, 2 nm noise, 64-run prior + affine fit [nm]
+\newcommand{\EtwoOursNineSmallPrior}{3.6}  % E2: 9 marks, 2 nm noise, 64-run prior, ours [nm]
+\newcommand{\EtwoPriorAffineNineSmallPrior}{4.4}  % E2: 9 marks, 2 nm noise, 64-run prior + affine fit [nm]
 \newcommand{\EtwoOursSixteenSmallPrior}{1.7}  % E2: 16 marks, 2 nm noise, 64-run prior, ours [nm]
-\newcommand{\EtwoPriorAffineSixteenSmallPrior}{4.8}  % E2: 16 marks, 2 nm noise, 64-run prior + affine fit [nm]
-\newcommand{\EtwoPolyTwoNine}{6.9}  % E2: 9 marks, 2 nm noise, 2nd-order correction [nm]
-\newcommand{\EtwoPolyThreeSixteen}{2.3}  % E2: 16 marks, 2 nm noise, 3rd-order correction [nm]
-\newcommand{\EtwoAffineSixteen}{5.9}  % E2: 16 marks, 2 nm noise, affine [nm]
+\newcommand{\EtwoPriorAffineSixteenSmallPrior}{3.9}  % E2: 16 marks, 2 nm noise, 64-run prior + affine fit [nm]
+\newcommand{\EtwoPolyTwoNine}{7.0}  % E2: 9 marks, 2 nm noise, 2nd-order correction [nm]
+\newcommand{\EtwoPolyThreeSixteen}{2.2}  % E2: 16 marks, 2 nm noise, 3rd-order correction [nm]
+\newcommand{\EtwoAffineSixteen}{5.8}  % E2: 16 marks, 2 nm noise, affine [nm]
 \newcommand{\EthreeOodDTOurs}{0.96}  % E3 ood_dT_head_gt40: R2(d_max), ours
 \newcommand{\EthreeOodDTBaseMin}{0.69}  % E3 ood_dT_head_gt40: R2(d_max), worst learned baseline
-\newcommand{\EthreeOodDTBaseMax}{0.83}  % E3 ood_dT_head_gt40: R2(d_max), best learned baseline
+\newcommand{\EthreeOodDTBaseMax}{0.82}  % E3 ood_dT_head_gt40: R2(d_max), best learned baseline
 \newcommand{\EthreeOodLOurs}{0.96}  % E3 ood_L_die_gt14: R2(d_max), ours
 \newcommand{\EthreeOodLBaseMin}{0.66}  % E3 ood_L_die_gt14: R2(d_max), worst learned baseline
 \newcommand{\EthreeOodLBaseMax}{0.92}  % E3 ood_L_die_gt14: R2(d_max), best learned baseline
@@ -46,3 +46,26 @@
 \newcommand{\PinnFieldPhys}{92}  % E4: PINN field RMSE at N=64, with physics loss [nm]
 \newcommand{\PinnFieldNoPhys}{88}  % E4: PINN field RMSE at N=64, physics loss removed [nm]
 \newcommand{\PinnDmaxSixtyFour}{0.83}  % E4: PINN R2(d_max) at N=64
+\newcommand{\NParams}{16}  % swept process/geometry/material parameters
+\newcommand{\NTrainRuns}{1024}  % FEM training runs (Sobol)
+\newcommand{\NHoldoutRuns}{128}  % FEM holdout runs (Latin hypercube)
+\newcommand{\NPads}{21}  % pads per die edge (n x n grid)
+\newcommand{\MeshCoarse}{12}  % elements along the die edge in the datasets
+\newcommand{\RunTimeMedianS}{23}  % median wall time per FEM run [s]
+\newcommand{\MeshFine}{28}  % finest mesh in the convergence study
+\newcommand{\ConvCoarsePct}{0.2}  % worst m_x/d_max change, coarse vs finest mesh [%]
+\newcommand{\DofsCoarse}{99,858}  % displacement DOFs, die + wafer, coarse mesh
+\newcommand{\BondLayerEffectPct}{0.3}  % largest d_max change when the bond layers get Si properties [%]
+\newcommand{\SiE}{130}  % Si Young's modulus [GPa]
+\newcommand{\SiNu}{0.28}  % Si Poisson ratio
+\newcommand{\SiAlpha}{2.6}  % Si thermal expansion [ppm/K]
+\newcommand{\CuE}{120}  % Cu Young's modulus [GPa]
+\newcommand{\CuAlpha}{16.7}  % Cu thermal expansion [ppm/K]
+\newcommand{\Tref}{20}  % reference (pad patterning) temperature [C]
+\newcommand{\WaferPatchFactor}{2}  % wafer patch edge / die edge
+\newcommand{\NzDie}{4}  % elements through the die thickness
+\newcommand{\NzWafer}{4}  % elements through the wafer thickness
+\newcommand{\NRing}{6}  % elements across the wafer margin
+\newcommand{\NTimeSteps}{20}  % thermal time steps per run
+\newcommand{\TFirstUs}{1}  % first thermal time step [us]
+\newcommand{\VerifTolPct}{1}  % tolerance of the analytic checks in tests/test_verification.py [%]

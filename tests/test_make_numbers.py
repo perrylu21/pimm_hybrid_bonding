@@ -48,9 +48,10 @@ def test_real_benchmark_numbers_match_verified_values():
     got = {k: v[1].format(v[0]) for k, v in nums.items()}
     assert got["RzeroKL"] == "99.1" and got["RzeroGeneric"] == "96.2" and got["RzeroMembrane"] == "45.6"
     assert got["NdmaxOurs"] == "64" and got["NdmaxBaseline"] == "512"
-    assert got["EtwoOursFour"] == "2.5" and got["EtwoOursFourSmallPrior"] == "5.1"  # E2 rerun 2026-10-21
-    assert got["EtwoPriorAffineFour"] == "2.5" and got["EtwoPriorAffineFourSmallPrior"] == "5.1"
-    assert got["EtwoOursSixteenSmallPrior"] == "1.7" and got["EtwoPolyThreeSixteen"] == "2.3"
+    # E2 regenerated 2026-11-10 with 3 prior subsets per prior size (was 1)
+    assert got["EtwoOursFour"] == "2.5" and got["EtwoOursFourSmallPrior"] == "4.4"
+    assert got["EtwoPriorAffineFour"] == "2.6" and got["EtwoPriorAffineFourSmallPrior"] == "4.4"
+    assert got["EtwoOursSixteenSmallPrior"] == "1.7" and got["EtwoPolyThreeSixteen"] == "2.2"
     assert got["EtwoAffineFour"] == "8.1"
     assert got["PinnFieldPhys"] == "92" and got["PinnFieldNoPhys"] == "88"
 
