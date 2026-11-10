@@ -53,3 +53,28 @@ def test_real_benchmark_numbers_match_verified_values():
     assert got["EtwoOursSixteenSmallPrior"] == "1.7" and got["EtwoPolyThreeSixteen"] == "2.3"
     assert got["EtwoAffineFour"] == "8.1"
     assert got["PinnFieldPhys"] == "92" and got["PinnFieldNoPhys"] == "88"
+
+
+def _conv():
+    rows = []
+    for case, scale in (("default", 1.0), ("thin_layer", 2.0)):
+        for lvl, d in ((12, 100.0), (20, 100.05), (28, 100.1)):
+            rows.append({"case": case, "setting": "mesh_n", "level": lvl, "n_dofs": 1000 * lvl,
+                         "m_x": 50.0, "d_max": d * scale})
+        rows.append({"case": case, "setting": "bond_layer_as_si", "level": "", "n_dofs": 20000,
+                     "m_x": 50.0, "d_max": 100.05 * scale * 1.003})
+    return pd.DataFrame(rows)
+
+
+def test_mesh_convergence_percent_is_worst_case_coarse_vs_finest():
+    # coarse 100 vs finest 100.1 -> 0.0999 %, same relative gap in both cases
+    assert abs(mn.coarse_vs_finest_pct(_conv(), coarse=12) - 100 * 0.1 / 100.1) < 1e-9
+
+
+@pytest.mark.skipif(not (ROOT / "results" / "convergence.csv").exists(), reason="convergence study not present")
+def test_reference_model_numbers():
+    nums = mn.compute_reference(ROOT)
+    got = {k: v[1].format(v[0]) for k, v in nums.items()}
+    assert got["NTrainRuns"] == "1024" and got["NHoldoutRuns"] == "128" and got["NPads"] == "21"
+    assert got["NParams"] == "16" and got["MeshCoarse"] == "12"
+    assert float(got["ConvCoarsePct"]) < 2.0

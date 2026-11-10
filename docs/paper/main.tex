@@ -53,11 +53,65 @@ packaging \cite{sung2026dieshift}; physics/data hybrid models and digital twins 
 W2W bonding mechanics \cite{ghosh2026w2w}; ML for bonding overlay \cite{james2024}; PINNs \cite{raissi2019pinn} and PINN
 applications in packaging and contact mechanics \cite{warpagepinn2026,mei2026sinteredag,xia2024pinncontact}.}
 
-\section{High-fidelity reference model}
-3D transient thermo-mechanical FEM of the bonding moment (DOLFINx): heat conduction in die, bond layers and wafer;
-quasi-static thermo-elasticity of each body; pads lock when the bond wave reaches them; pre-contact rigid motion removed
-(bonder alignment). 16 swept parameters (Table~\ref{tab:params}), 1{,}024 Sobol training runs, 128 Latin-hypercube
-holdout runs, $21\times21$ pads per die. The coarse mesh used here ($n=12$) is within 0.2\% of the finest mesh. \todo{Table of parameters from README.}
+\section{High-fidelity reference model}\label{sec:reference}
+All learning and all evaluation in this paper use a three-dimensional transient finite-element model of the bonding
+moment as the reference. It is more complete than the reduced physics of Section~\ref{sec:method}: it resolves the
+temperature field in time, the die and the wafer as separate elastic bodies, and the progressive locking of pads by the
+bond wave. It has not been compared with measured overlay; every accuracy figure below is relative to this model
+(Section~\ref{sec:discussion}).
+
+\paragraph{Geometry and materials.} A square silicon die of edge $L$ and thickness $t$ faces a square patch of the target
+wafer, \WaferPatchFactor~times wider than the die, of thickness $t_w$. Each bonding surface carries a bond layer of
+thickness $t_b$, a mixture of dielectric and Cu pads homogenized by the rule of mixtures (stiffness-weighted for the
+thermal expansion) with Cu area fraction $\phi_{\mathrm{Cu}}$. Silicon is isotropic with $E=\SI{\SiE}{\giga\pascal}$,
+$\nu=\SiNu$ and $\alpha_{\mathrm{Si}}=\SI{\SiAlpha}{ppm/K}$; Cu has $E=\SI{\CuE}{\giga\pascal}$ and
+$\alpha=\SI{\CuAlpha}{ppm/K}$. Pad patterns are aligned and stress-free at $T_{\mathrm{ref}}=\SI{\Tref}{\celsius}$.
+
+\paragraph{Thermal model.} At contact the die is at the bond-head temperature
+$T_{\mathrm{head}}=T_{\mathrm{chuck}}+\Delta T_{\mathrm{head}}$ and the wafer at the chuck temperature. Heat conduction
+through die, bond layers and wafer (perfect contact at the interface) is integrated with backward Euler over the time the
+bond wave needs to reach the farthest die corner; the die top is held at $T_{\mathrm{head}}$ and the wafer bottom at
+$T_{\mathrm{chuck}}$. The \NTimeSteps~time steps grow geometrically from \SI{\TFirstUs}{\micro\second}, because the thermal
+transient after contact is much shorter than the passage of the wave.
+
+\paragraph{Mechanical model.} Before a pad bonds, die and wafer are not connected, so each is solved as its own linear
+thermo-elastic body under the instantaneous temperature field (quasi-static). The eigenstrain is
+$\alpha\,(T-T_{\mathrm{ref}})$; in the die it includes a through-thickness gradient that gives the die its initial
+curvature $\kappa$. The bond head acts on the die top as a normal spring of stiffness $k_{\mathrm{head}}$, between a free
+die ($k_{\mathrm{head}}\to0$) and a rigid flat head that flattens the die ($k_{\mathrm{head}}\to\infty$). The bond force
+$F$ enters as an equal and opposite pressure $F/L^2$ on the die top and bottom, and on the wafer within the die
+footprint. The wafer bottom follows the thermal expansion of the chuck, $\alpha_c(T_{\mathrm{chuck}}-T_{\mathrm{ref}})$,
+and the patch edges follow the expansion of the surrounding wafer. The in-plane rigid motion of the die is removed by
+point constraints at the centre of its bonding surface; this is the anchoring convention discussed in
+Section~\ref{sec:quantity}.
+
+\paragraph{Bond wave and overlay.} The bond front starts at $(x_0,y_0)L$ and spreads radially at speed $v$. A pad at
+distance $r$ from the origin locks at $t=r/v$, and its overlay is the in-plane displacement of the die pad minus that of
+the wafer pad at that time, interpolated between time steps. The rigid translation and rotation present before contact
+are subtracted, as the bonder's alignment would remove them. The overlay is recorded on an $\NPads\times\NPads$ pad grid
+covering the die.
+
+\paragraph{Discretization and verification.} The mesh is structured and hexahedral, with quadratic displacement
+elements: \MeshCoarse~elements along the die edge in the datasets, \NRing~across the wafer margin, \NzDie~and
+\NzWafer~through the die and wafer thicknesses and one per bond layer, about \DofsCoarse~displacement unknowns in total.
+Quadratic elements are needed because linear hexahedra lock in bending at these aspect ratios. A mesh study at the
+default parameters and at the thin-layer corner of the parameter ranges (thinnest bond layer and die, largest die)
+shows that this mesh changes $m_x$ and $d_{\max}$ by at most \ConvCoarsePct\% relative to
+$\MeshFine$ elements along the edge. Automated tests check the model against closed-form limits within
+\VerifTolPct\%: a uniform thermal mismatch gives the exact magnification, a free curved die gives the plate bending
+strain, and a rigid head suppresses it; zero load gives zero overlay, and a mirrored wave origin mirrors the translation.
+
+\paragraph{Parameters and datasets.} The \NParams~swept parameters and their ranges are listed in
+Table~\ref{tab:params}. Replacing the bond-layer properties by those of silicon changes $d_{\max}$ by at most
+\BondLayerEffectPct\%, so the four bond-layer parameters are expected to matter little; they are kept to test that the
+learned models find this. The training set has \NTrainRuns~runs on a scrambled Sobol sequence and the holdout set
+\NHoldoutRuns~runs on an independent Latin hypercube; holdout runs are never used for training or model selection. A
+run takes about \RunTimeMedianS~s (median, two threads).
+
+\begin{table}[t]\centering\small
+\caption{Swept parameters of the reference model. Log-scaled parameters are sampled uniformly in $\log$.}\label{tab:params}
+\input{../../results/benchmark/figures/table_params.tex}
+\end{table}
 
 \section{Method}\label{sec:method}
 
@@ -228,7 +282,7 @@ no physics loss). Baselines: analytic only, GP on data only, analytic + GP resid
 \input{../../results/benchmark/figures/table_e1_summary.tex}
 \end{table}
 
-\section{Discussion and limitations}
+\section{Discussion and limitations}\label{sec:discussion}
 \begin{itemize}
   \item No experimental overlay data: validation is against an independent, higher-fidelity model (3D transient FEM with
         bond-wave locking) whose physics is richer than the reduced model, so the test is not an inverse crime; the

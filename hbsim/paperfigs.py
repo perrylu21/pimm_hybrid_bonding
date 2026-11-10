@@ -234,9 +234,54 @@ def summary_table(e1, out, sizes=(16, 32, 64, 256)):
     return t
 
 
+PARAM_DOC = {  # name -> (LaTeX unit, short description); ranges and scales come from hbsim.params.SWEPT
+    "dT_head": (r"\si{\celsius}", r"bond-head minus chuck temperature, $T_{\mathrm{head}}-T_{\mathrm{chuck}}$"),
+    "T_chuck": (r"\si{\celsius}", "chuck (wafer) temperature"),
+    "v_wave": (r"\si{\milli\meter\per\second}", "bond-wave speed"),
+    "L_die": (r"\si{\milli\meter}", "die edge length (square die)"),
+    "t_die": (r"\si{\micro\meter}", "die thickness"),
+    "t_wafer": (r"\si{\micro\meter}", "wafer thickness"),
+    "t_bond": (r"\si{\micro\meter}", "bond-layer thickness (each side)"),
+    "E_d": (r"\si{\giga\pascal}", "Young's modulus of the bond dielectric"),
+    "alpha_d": (r"ppm/K", "thermal expansion of the bond dielectric"),
+    "phi_cu": ("--", "Cu pad area fraction in the bond layer"),
+    "alpha_chuck": (r"ppm/K", "thermal expansion of the chuck"),
+    "kappa": (r"\si{\per\meter}", r"die curvature before bonding ($>0$: bottom convex)"),
+    "F_bond": (r"\si{\newton}", "bond force"),
+    "k_head": (r"MPa/mm", "bond-head stiffness against die bending"),
+    "x0": (r"$L$", "bond-wave origin offset in $x$ (fraction of die size)"),
+    "y0": (r"$L$", "bond-wave origin offset in $y$ (fraction of die size)"),
+}
+
+
+def _num(v):
+    """Number in math mode; exact powers of ten outside [0.01, 1000) as 10^k."""
+    if v > 0:
+        k = np.log10(v)
+        if abs(k - round(k)) < 1e-12 and (v < 1e-2 or v >= 1e3):
+            return f"$10^{{{int(round(k))}}}$"
+    return f"${v:g}$"
+
+
+def param_table(out):
+    """LaTeX table of the swept parameters (name, description, unit, range, scale) from the schema."""
+    from hbsim.params import SWEPT
+    lines = [r"\begin{tabular}{llllc}", r"\toprule",
+             r"Parameter & Description & Unit & Range & Scale \\", r"\midrule"]
+    for name, s in SWEPT.items():
+        unit, doc = PARAM_DOC[name]
+        tt = name.replace("_", r"\_")
+        lines.append(rf"\texttt{{{tt}}} & {doc} & {unit} & {_num(s.low)} -- {_num(s.high)} & {s.scale} \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "table_params.tex").write_text("\n".join(lines) + "\n")
+
+
 def make_all(bench, out, train_dir, test_dir):
     _style()
     out.mkdir(parents=True, exist_ok=True)
+    param_table(out)
     r0, e1, e2, e3 = (_bench(bench, f) for f in ("r0_representation.csv", "e1_learning_curve.csv",
                                                   "e2_sparse_marks.csv", "e3_robustness.csv"))
     if r0 is not None:
