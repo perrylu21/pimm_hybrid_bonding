@@ -5,7 +5,7 @@
 - Report the PINN result honestly: the soft physics loss gives no gain and is slightly worse (ablation at N=64: field RMSE 92 nm with the physics loss vs 88 nm without). Do not spin it.
 - Claims about real fabs are out of scope: all validation is against the 3D transient FEM (state this, do not hide it).
 - Figures are produced by hbsim/paperfigs.py; change the code, never edit figures by hand.
-- After every edit, compile docs/paper/main.tex with latexmk and fix errors.
+- After every edit, compile docs/paper/main.tex with latexmk (scripts/build_paper.sh runs it in the texlive/texlive Docker image) and fix errors. Figures appear only after results/benchmark/figures exists.
 
 ## Paper decisions (2026-10-21)
 - Title: "Physics-Structured Learning of Bonding-Induced Overlay Distortion in Data-Scarce Die-to-Wafer Hybrid Bonding". Avoid "physics-informed" for our method (reserve it for the PINN) and avoid "die shift" as the predicted quantity (the model's die-centre anchor keeps translation/rotation near zero; state that assumption in the Method).

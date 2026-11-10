@@ -10,3 +10,15 @@ results/
 .pytest_cache/
 *.npz
 .superpowers/
+
+# LaTeX build files
+docs/paper/*.aux
+docs/paper/*.bbl
+docs/paper/*.blg
+docs/paper/*.fdb_latexmk
+docs/paper/*.fls
+docs/paper/*.log
+docs/paper/*.out
+docs/paper/*.pdf
+docs/paper/*.png
+docs/paper/*.tmp

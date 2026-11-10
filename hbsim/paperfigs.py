@@ -215,7 +215,22 @@ def summary_table(e1, out, sizes=(16, 32, 64, 256)):
         rows.append(r)
     t = pd.DataFrame(rows)
     t.to_csv(out / "table_e1_summary.csv", index=False)
-    (out / "table_e1_summary.tex").write_text(t.to_latex(index=False, float_format="%.3f", na_rep="--"))
+    # Hand-built LaTeX: grouped header (sizes only above each column) keeps the table within the text
+    # width, and the d_max label is in math mode (a raw underscore breaks LaTeX).
+    def cell(v, fmt):
+        return "--" if pd.isna(v) else fmt.format(v)
+
+    k = len(sizes)
+    lines = [r"\begin{tabular}{l" + "r" * (2 * k) + "}", r"\toprule",
+             rf" & \multicolumn{{{k}}}{{c}}{{$R^2(d_{{\max}})$}} & \multicolumn{{{k}}}{{c}}{{field RMSE [nm]}} \\",
+             rf"\cmidrule(lr){{2-{k + 1}}}\cmidrule(lr){{{k + 2}-{2 * k + 1}}}",
+             "FEM training runs $N$ & " + " & ".join(str(n) for n in sizes * 2) + r" \\", r"\midrule"]
+    for _, r in t.iterrows():
+        vals = [cell(r[f"R2 d_max N={n}"], "{:.3f}") for n in sizes]
+        vals += [cell(r[f"field RMSE N={n} [nm]"], "{:.1f}") for n in sizes]
+        lines.append(r["model"] + " & " + " & ".join(vals) + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    (out / "table_e1_summary.tex").write_text("\n".join(lines) + "\n")
     return t
 
 
