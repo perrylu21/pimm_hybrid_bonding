@@ -333,3 +333,7 @@ B=results/benchmark
 Every benchmark appends one CSV row per finished case and skips finished rows, so you can stop
 with Ctrl-C and rerun the same command. `paper-figs` reads every matching CSV under `--bench`
 (including `$B/pinn/`).
+
+## License
+
+Code: MIT (see `LICENSE`).
