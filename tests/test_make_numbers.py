@@ -54,6 +54,13 @@ def test_real_benchmark_numbers_match_verified_values():
     assert got["EtwoOursSixteenSmallPrior"] == "1.7" and got["EtwoPolyThreeSixteen"] == "2.2"
     assert got["EtwoAffineFour"] == "8.1"
     assert got["PinnFieldPhys"] == "92" and got["PinnFieldNoPhys"] == "88"
+    # experiment configuration, read back from the CSVs
+    assert got["EoneSizes"] == "16, 32, 64, 128, 256, 512, 1024" and got["EoneRepsSmall"] == "5"
+    assert got["EtwoKs"] == "3, 4, 5, 9, 16" and got["EtwoNoises"] == "1, 2, 5" and got["EtwoReps"] == "3"
+    assert got["EthreeDTThreshold"] == "40" and got["EthreeLThreshold"] == "14" and got["EthreeN"] == "128"
+    assert got["PinnAblationN"] == "64" and got["PinnSizes"] == "16, 32, 64, 128, 256"
+    assert got["EtwoPriorGainFourLarge"] == "3.2" and got["EtwoPriorGainFourSmall"] == "1.8"
+    assert got["EtwoBasisGainSixteenLarge"] == "1.5" and got["EtwoBasisGainSixteenSmall"] == "2.4"
 
 
 def _conv():

@@ -89,6 +89,22 @@ def compute(bench):
     n["EtwoPolyTwoNine"] = (e2v(256, 9, 2.0, "poly2"), "{:.1f}", "E2: 9 marks, 2 nm noise, 2nd-order correction [nm]")
     n["EtwoPolyThreeSixteen"] = (e2v(256, 16, 2.0, "poly3"), "{:.1f}", "E2: 16 marks, 2 nm noise, 3rd-order correction [nm]")
     n["EtwoAffineSixteen"] = (e2v(256, 16, 2.0, "affine"), "{:.1f}", "E2: 16 marks, 2 nm noise, affine [nm]")
+    for k, word in ((4, "Four"), (9, "Nine"), (16, "Sixteen")):
+        if k not in set(e2.k):
+            raise ValueError(f"E2 has no k={k} rows")
+        n[f"EtwoK{word}"] = (k, "{:d}", f"E2 mark count quoted in the text")
+    n["EtwoNoiseHigh"] = (float(e2.noise_nm.max()), "{:g}", "E2 highest noise level [nm]")
+    n["EtwoNoiseRef"] = (2.0, "{:g}", "E2 noise level used for quoted numbers [nm]") if 2.0 in set(e2.noise_nm) else (None, "{:g}", "")
+    n["EtwoOursNineNoiseHigh"] = (e2v(256, 9, float(e2.noise_nm.max()), "physics_map"), "{:.1f}", "E2: 9 marks, highest noise, 256-run prior, ours [nm]")
+    n["EtwoPriorAffineNineNoiseHigh"] = (e2v(256, 9, float(e2.noise_nm.max()), "prior_affine"), "{:.1f}", "E2: same, prior + affine [nm]")
+    # Ratios for the two-part E2 message (user framing (a), 2026-11-12), from unrounded means.
+    for prior, ptag in ((256, "Large"), (64, "Small")):
+        n[f"EtwoPriorGainFour{ptag}"] = (e2v(prior, 4, 2.0, "affine") / e2v(prior, 4, 2.0, "prior_affine"), "{:.1f}",
+                                          f"E2: 4 marks, affine / (prior + affine), {prior}-run prior")
+        n[f"EtwoBasisGainSixteen{ptag}"] = (e2v(prior, 16, 2.0, "prior_affine") / e2v(prior, 16, 2.0, "physics_map"), "{:.1f}",
+                                             f"E2: 16 marks, (prior + affine) / ours, {prior}-run prior")
+        n[f"EtwoBasisGainNine{ptag}"] = (e2v(prior, 9, 2.0, "prior_affine") / e2v(prior, 9, 2.0, "physics_map"), "{:.2f}",
+                                          f"E2: 9 marks, (prior + affine) / ours, {prior}-run prior")
 
     e3 = pd.read_csv(bench / "e3_robustness.csv")
     for case, tag in (("ood_dT_head_gt40", "OodDT"), ("ood_L_die_gt14", "OodL"), ("train_noise_5nm", "NoiseFive")):
@@ -102,6 +118,47 @@ def compute(bench):
     n["PinnFieldPhys"] = (_median(pinn, "field_rmse_nm", model="pinn", n_train=64), "{:.0f}", "E4: PINN field RMSE at N=64, with physics loss [nm]")
     n["PinnFieldNoPhys"] = (_median(abl, "field_rmse_nm", model="pinn_nophys", n_train=64), "{:.0f}", "E4: PINN field RMSE at N=64, physics loss removed [nm]")
     n["PinnDmaxSixtyFour"] = (_median(pinn, "r2_d_max", model="pinn", n_train=64), "{:.2f}", "E4: PINN R2(d_max) at N=64")
+
+    # Experiment configuration, read back from the result files (what was actually run).
+    def lst(vals):
+        return ", ".join(f"{v:g}" for v in sorted(set(vals)))
+
+    def reps(df, **where):
+        sel = df
+        for k, v in where.items():
+            sel = sel[sel[k] == v]
+        return int(sel.rep.nunique())
+
+    n["EoneSizes"] = (lst(e1.n_train), "{}", "E1 training-set sizes")
+    n["EoneRepsSmall"] = (reps(e1, model=OURS, n_train=int(e1.n_train.min())), "{:d}", "E1 repeats at small N")
+    full = [k for k in sorted(e1[e1.model == OURS].n_train.unique()) if reps(e1, model=OURS, n_train=k) == n["EoneRepsSmall"][0]]
+    n["EoneFullRepsMaxN"] = (int(max(full)), "{:d}", "largest E1 size with the full number of repeats")
+    sizes = sorted(e1[e1.model == OURS].n_train.unique())
+    mid = [k for k in sizes if max(full) < k < max(sizes)]
+    if len(mid) != 1:
+        raise ValueError(f"expected one E1 size between full-repeat sizes and the largest, got {mid}")
+    n["EoneMidN"] = (int(mid[0]), "{:d}", "E1 size with reduced repeats")
+    n["EoneRepsFiveTwelve"] = (reps(e1, model=OURS, n_train=int(mid[0])), "{:d}", "E1 repeats at that size")
+    n["EoneRepsMax"] = (reps(e1, model=OURS, n_train=int(e1.n_train.max())), "{:d}", "E1 repeats at the largest N")
+    n["EoneMaxN"] = (int(e1.n_train.max()), "{:d}", "largest E1 training set")
+    n["EtwoKs"] = (lst(e2.k), "{}", "E2 marks per die")
+    n["EtwoNoises"] = (lst(e2.noise_nm), "{}", "E2 measurement noise levels [nm]")
+    n["EtwoPriorSmall"] = (int(e2.n_prior.min()), "{:d}", "E2 smaller prior training set")
+    n["EtwoPriorLarge"] = (int(e2.n_prior.max()), "{:d}", "E2 larger prior training set")
+    n["EtwoReps"] = (int(e2.rep.nunique()), "{:d}", "E2 prior subsets per prior size")
+    ood = {c: float(re.search(r"gt(\d+(?:\.\d+)?)$", c).group(1)) for c in e3["case"].unique() if c.startswith("ood_")}
+    noisec = sorted(float(re.search(r"noise_([\d.]+)nm", c).group(1)) for c in e3["case"].unique() if "noise" in c)
+    n["EthreeN"] = (int(e3.n_train.max()), "{:d}", "E3 training-set size")
+    n["EthreeReps"] = (int(e3.rep.nunique()), "{:d}", "E3 repeats")
+    n["EthreeNoises"] = (" and ".join(f"{v:g}" for v in noisec), "{}", "E3 training-noise levels [nm]")
+    n["EthreeDTThreshold"] = (ood["ood_dT_head_gt40"], "{:g}", "E3 extrapolation split on dT_head [C]")
+    n["EthreeLThreshold"] = (ood["ood_L_die_gt14"], "{:g}", "E3 extrapolation split on L_die [mm]")
+    for case, tag in (("ood_dT_head_gt40", "OodDT"), ("ood_L_die_gt14", "OodL")):
+        n[f"Ethree{tag}NTest"] = (int(e3[e3.case == case].n_test.iloc[0]), "{:d}", f"E3 {case}: holdout runs beyond the split")
+    n["PinnSizes"] = (lst(pinn.n_train), "{}", "PINN training-set sizes")
+    n["PinnReps"] = (int(pinn.rep.nunique()), "{:d}", "PINN repeats per size")
+    n["PinnAblationN"] = (int(abl.n_train.iloc[0]), "{:d}", "PINN ablation training-set size")
+    n["PinnAblationReps"] = (int(abl.rep.nunique()), "{:d}", "PINN ablation repeats")
     return n
 
 

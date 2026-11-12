@@ -27,9 +27,10 @@ polynomial with 24, and it shows that the non-uniform die shift is bending-domin
 A hard-constrained realization (physics basis with Gaussian-process coefficients) reaches a holdout
 $R^2\geq0.95$ for the maximum pad misalignment with 64 FEM runs, where the best hybrid baseline (analytic model
 plus GP residual) needs 512, and it keeps $R^2=0.96$ when extrapolating to hotter bond heads, against 0.82--0.83
-for the baselines. For sparse metrology, a Bayesian reconstruction in the physics span recovers the full
-441-pad overlay of a die from four marks with a median error of 2.5~nm (prior from 256 runs) or 5.0~nm
-(64 runs), versus 8.1~nm for the industry six-parameter overlay model. A soft-constrained parametric PINN with
+for the baselines. For sparse metrology, the physics prior lowers the full-die reconstruction error of the industry six-parameter
+overlay model by a factor of \EtwoPriorGainFourSmall--\EtwoPriorGainFourLarge\ with \EtwoKFour~marks, and a Bayesian
+reconstruction in the physics span lowers it by a further \EtwoBasisGainSixteenLarge--\EtwoBasisGainSixteenSmall\ when
+\EtwoKSixteen~marks are available. A soft-constrained parametric PINN with
 the same physics is competitive only at the smallest data size, and its physics residual adds no measurable
 accuracy---we analyze why. Code, data and the pinned FEM container are released.
 \end{abstract}
@@ -259,10 +260,62 @@ for each die it is one small linear solve. With few marks it stays close to the 
 toward the data, but only along directions the physics basis allows.
 
 \section{Experiments}\label{sec:experiments}
-\textbf{R0} representation test; \textbf{E1} learning curves ($N=16\ldots1024$, 5 random subsets);
-\textbf{E2} sparse marks ($k=3,4,5,9,16$; noise 1, 2, \SI{5}{\nano\meter}); \textbf{E3} robustness
-(training noise, extrapolation in $\Delta T_{head}$ and $L_{die}$); \textbf{E4} ablations (no prior, membrane only,
-no physics loss). Baselines: analytic only, GP on data only, analytic + GP residual, analytic + MLP ensemble.
+All experiments train on subsets of the \NTrainRuns~training runs of Section~\ref{sec:reference} and test on the
+\NHoldoutRuns~holdout runs, which no model sees during training. Unless stated otherwise, accuracy is the holdout $R^2$
+of three scalar targets computed from each predicted field with the overlay fit~\eqref{eq:overlayfit}: the
+magnification $m_x$, the non-uniform component $\mathrm{resid}_{3\sigma}$ and the largest misalignment $d_{\max}$.
+Models that predict whole fields are also scored by the root-mean-square pad error over all holdout pads (field RMSE).
+
+\paragraph{Models.} Besides the two realizations of Section~\ref{sec:method} we compare four baselines that use the
+same training runs:
+\begin{itemize}
+  \item \emph{analytic only}: the field $m_a(\mathbf{p})\,\boldsymbol\xi$ from~\eqref{eq:prior}, which needs no
+        simulation;
+  \item \emph{GP, data only}: one GP per scalar target on the \NParams~scaled parameters, with no physics and no prior;
+  \item \emph{analytic + GP residual} and \emph{analytic + MLP ensemble}: one GP per target, or an ensemble of
+        multilayer perceptrons, trained on the residual between each scalar target and its closed-form estimate
+        ($m_a$ for the magnifications, the corresponding $d_{\max}$ for the largest misalignment).
+\end{itemize}
+The two hybrid baselines thus receive the same analytic prior as our models; what they lack is the field structure.
+They predict the scalar targets directly, so they have no field RMSE.
+
+\paragraph{R0: representation.} Before any learning we ask how much of the reference overlay the reduced physics can
+represent at all. For every training run we remove the affine part of the field (the industry six-parameter overlay
+model) and project the remainder onto four candidate spans: the membrane responses of Section~\ref{sec:basis}, the
+bending gradients, both together, and a generic polynomial field of the same total degree in each component. Each span
+is orthonormalized together with the affine modes, so nearly collinear columns cannot inflate the fit. We report the
+share of the non-affine energy each span captures and the median remaining RMS per die, as a function of polynomial
+degree and hence dimension.
+
+\paragraph{E1: learning curves.} Every model is trained on random subsets of $N$ training runs, $N$ = \EoneSizes, and
+evaluated on the full holdout set. All models of one repeat share the same subset. We use \EoneRepsSmall~subsets per
+size up to $N=\EoneFullRepsMaxN$, \EoneRepsFiveTwelve~at $N=\EoneMidN$ and \EoneRepsMax~at $N=\EoneMaxN$ (the last only for the models whose
+training cost allows it), and report medians. The PINN is trained at $N$ = \PinnSizes, with \PinnReps~subsets each.
+
+\paragraph{E2: reconstruction from sparse marks.} The physics-structured model is trained on \EtwoPriorSmall~or
+\EtwoPriorLarge~runs (\EtwoReps~random subsets each) and serves as the prior of Section~\ref{sec:marks}. For every
+holdout die we then simulate a measurement: the reference overlay at $k$ = \EtwoKs~mark positions (the die corners
+and mid-edge or centre positions for the smaller counts, square grids for the larger ones) plus independent Gaussian
+noise of standard deviation $\sigma$ = \EtwoNoises~nm on each component. From the $k$ marks and the known process
+parameters each method reconstructs the full $\NPads\times\NPads$ field, which is compared with the reference field.
+Besides the MAP estimate~\eqref{eq:map} and the prior alone (no marks), we evaluate four empirical corrections fitted
+by least squares to the same marks: the six-parameter affine model used in production, second- and third-order
+polynomial corrections in each component (where the number of marks allows), and the physics prior plus an affine fit
+to its residual at the marks. The last one has the same prior information as our estimate and differs only in not
+using the physics basis. We report the median field RMSE over the holdout dies.
+
+\paragraph{E3: robustness.} Two departures from the clean setting of E1 are tested with $N=\EthreeN$ training runs
+and \EthreeReps~subsets. First, independent Gaussian noise of \EthreeNoises~nm is added to every training field, as an
+imperfect measurement would add it; the holdout set stays clean. Second, two extrapolation splits train only on runs
+with $\Delta T_{\mathrm{head}}\le\SI{\EthreeDTThreshold}{\celsius}$ or with $L\le\SI{\EthreeLThreshold}{\milli\meter}$
+and test only on the holdout runs beyond these limits (\EthreeOodDTNTest~and \EthreeOodLNTest~runs). The PINN is not
+included in E3 because of its training cost.
+
+\paragraph{E4: ablations.} Within the protocol of E1 we remove one ingredient at a time from the physics-structured
+model: the analytic prior (the uniform coefficient is then learned from zero), or the bending columns (membrane
+responses only). For the PINN we remove the physics loss terms, which leaves a network fitted to the data with the
+same architecture and prior, or the bending potential; these ablations use $N=\PinnAblationN$ with
+\PinnAblationReps~subsets.
 
 \section{Results}
 \begin{figure}[t]\centering\includegraphics[width=0.7\linewidth]{fig_r0_representation.pdf}
@@ -281,6 +334,32 @@ no physics loss). Baselines: analytic only, GP on data only, analytic + GP resid
 \caption{Holdout accuracy versus number of FEM training runs (median over repeats).}\label{tab:e1}
 \input{../../results/benchmark/figures/table_e1_summary.tex}
 \end{table}
+
+\subsection{Reconstruction from sparse overlay marks (E2)}\label{sec:res-e2}
+Figure~\ref{fig:e2} separates two effects: what the physics prior contributes, and what the physics basis adds on
+top of it. Numbers below are medians over the holdout dies at a measurement noise of \EtwoNoiseRef~nm.
+
+\emph{With few marks, the prior does the work.} With $k=\EtwoKFour$ marks the six-parameter affine model leaves a field
+error of \EtwoAffineFour~nm, because it cannot represent the non-affine part of the overlay. Adding the physics prior and
+fitting the affine model only to its residual lowers the error to \EtwoPriorAffineFour~nm with a prior trained on
+\EtwoPriorLarge~runs and \EtwoPriorAffineFourSmallPrior~nm with \EtwoPriorSmall~runs, a factor of
+\EtwoPriorGainFourLarge~and \EtwoPriorGainFourSmall. Our MAP estimate gives no further gain at this mark count
+(\EtwoOursFour~and \EtwoOursFourSmallPrior~nm): so few marks cannot resolve more than the prior already predicts. Without
+any marks the \EtwoPriorLarge-run prior alone leaves \EtwoPriorOnly~nm, the same as the affine model with
+\EtwoKFour~marks.
+
+\emph{With dense marks, the physics basis adds value.} With $k=\EtwoKSixteen$ marks the MAP estimate reaches
+\EtwoOursSixteen~nm (\EtwoPriorLarge-run prior) and \EtwoOursSixteenSmallPrior~nm (\EtwoPriorSmall-run prior), against
+\EtwoPriorAffineSixteen~and \EtwoPriorAffineSixteenSmallPrior~nm for the prior with an affine correction: the physics
+basis lowers the error by a further factor of \EtwoBasisGainSixteenLarge~to \EtwoBasisGainSixteenSmall. The
+third-order correction, the strongest empirical model these marks support, reaches \EtwoPolyThreeSixteen~nm without any
+prior. At $k=\EtwoKNine$ the benefit depends on the prior: it is a factor of \EtwoBasisGainNineSmall~with the
+\EtwoPriorSmall-run prior, but with the \EtwoPriorLarge-run prior the MAP estimate (\EtwoOursNine~nm) is no better than
+the prior with an affine correction (\EtwoPriorAffineNine~nm), and at \EtwoNoiseHigh~nm noise it is slightly worse
+(\EtwoOursNineNoiseHigh~vs \EtwoPriorAffineNineNoiseHigh~nm).
+
+For a fab this splits into two recommendations: a prior from a few hundred simulations is worth having even with the
+minimum number of marks, and the physics basis becomes worth its added complexity once dense marking is available.
 
 \section{Discussion and limitations}\label{sec:discussion}
 \begin{itemize}

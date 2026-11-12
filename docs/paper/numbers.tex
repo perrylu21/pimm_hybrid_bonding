@@ -34,6 +34,19 @@
 \newcommand{\EtwoPolyTwoNine}{7.0}  % E2: 9 marks, 2 nm noise, 2nd-order correction [nm]
 \newcommand{\EtwoPolyThreeSixteen}{2.2}  % E2: 16 marks, 2 nm noise, 3rd-order correction [nm]
 \newcommand{\EtwoAffineSixteen}{5.8}  % E2: 16 marks, 2 nm noise, affine [nm]
+\newcommand{\EtwoKFour}{4}  % E2 mark count quoted in the text
+\newcommand{\EtwoKNine}{9}  % E2 mark count quoted in the text
+\newcommand{\EtwoKSixteen}{16}  % E2 mark count quoted in the text
+\newcommand{\EtwoNoiseHigh}{5}  % E2 highest noise level [nm]
+\newcommand{\EtwoNoiseRef}{2}  % E2 noise level used for quoted numbers [nm]
+\newcommand{\EtwoOursNineNoiseHigh}{3.7}  % E2: 9 marks, highest noise, 256-run prior, ours [nm]
+\newcommand{\EtwoPriorAffineNineNoiseHigh}{3.3}  % E2: same, prior + affine [nm]
+\newcommand{\EtwoPriorGainFourLarge}{3.2}  % E2: 4 marks, affine / (prior + affine), 256-run prior
+\newcommand{\EtwoBasisGainSixteenLarge}{1.5}  % E2: 16 marks, (prior + affine) / ours, 256-run prior
+\newcommand{\EtwoBasisGainNineLarge}{0.97}  % E2: 9 marks, (prior + affine) / ours, 256-run prior
+\newcommand{\EtwoPriorGainFourSmall}{1.8}  % E2: 4 marks, affine / (prior + affine), 64-run prior
+\newcommand{\EtwoBasisGainSixteenSmall}{2.4}  % E2: 16 marks, (prior + affine) / ours, 64-run prior
+\newcommand{\EtwoBasisGainNineSmall}{1.23}  % E2: 9 marks, (prior + affine) / ours, 64-run prior
 \newcommand{\EthreeOodDTOurs}{0.96}  % E3 ood_dT_head_gt40: R2(d_max), ours
 \newcommand{\EthreeOodDTBaseMin}{0.69}  % E3 ood_dT_head_gt40: R2(d_max), worst learned baseline
 \newcommand{\EthreeOodDTBaseMax}{0.82}  % E3 ood_dT_head_gt40: R2(d_max), best learned baseline
@@ -46,6 +59,29 @@
 \newcommand{\PinnFieldPhys}{92}  % E4: PINN field RMSE at N=64, with physics loss [nm]
 \newcommand{\PinnFieldNoPhys}{88}  % E4: PINN field RMSE at N=64, physics loss removed [nm]
 \newcommand{\PinnDmaxSixtyFour}{0.83}  % E4: PINN R2(d_max) at N=64
+\newcommand{\EoneSizes}{16, 32, 64, 128, 256, 512, 1024}  % E1 training-set sizes
+\newcommand{\EoneRepsSmall}{5}  % E1 repeats at small N
+\newcommand{\EoneFullRepsMaxN}{256}  % largest E1 size with the full number of repeats
+\newcommand{\EoneMidN}{512}  % E1 size with reduced repeats
+\newcommand{\EoneRepsFiveTwelve}{2}  % E1 repeats at that size
+\newcommand{\EoneRepsMax}{1}  % E1 repeats at the largest N
+\newcommand{\EoneMaxN}{1024}  % largest E1 training set
+\newcommand{\EtwoKs}{3, 4, 5, 9, 16}  % E2 marks per die
+\newcommand{\EtwoNoises}{1, 2, 5}  % E2 measurement noise levels [nm]
+\newcommand{\EtwoPriorSmall}{64}  % E2 smaller prior training set
+\newcommand{\EtwoPriorLarge}{256}  % E2 larger prior training set
+\newcommand{\EtwoReps}{3}  % E2 prior subsets per prior size
+\newcommand{\EthreeN}{128}  % E3 training-set size
+\newcommand{\EthreeReps}{3}  % E3 repeats
+\newcommand{\EthreeNoises}{2 and 5}  % E3 training-noise levels [nm]
+\newcommand{\EthreeDTThreshold}{40}  % E3 extrapolation split on dT_head [C]
+\newcommand{\EthreeLThreshold}{14}  % E3 extrapolation split on L_die [mm]
+\newcommand{\EthreeOodDTNTest}{43}  % E3 ood_dT_head_gt40: holdout runs beyond the split
+\newcommand{\EthreeOodLNTest}{43}  % E3 ood_L_die_gt14: holdout runs beyond the split
+\newcommand{\PinnSizes}{16, 32, 64, 128, 256}  % PINN training-set sizes
+\newcommand{\PinnReps}{3}  % PINN repeats per size
+\newcommand{\PinnAblationN}{64}  % PINN ablation training-set size
+\newcommand{\PinnAblationReps}{2}  % PINN ablation repeats
 \newcommand{\NParams}{16}  % swept process/geometry/material parameters
 \newcommand{\NTrainRuns}{1024}  % FEM training runs (Sobol)
 \newcommand{\NHoldoutRuns}{128}  % FEM holdout runs (Latin hypercube)
